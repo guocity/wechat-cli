@@ -6,19 +6,22 @@ import os
 import pathlib
 import subprocess
 import sys
+import threading
 import time
 
 import frida
 
-from .setup import check_payload
+from wechat_cli.backends.macos.processes import check_instance
+from wechat_cli.backends.macos.setup import check_payload
 
 package = pathlib.Path(__file__).resolve().parent / "assets"
 app = pathlib.Path(os.environ["WECHAT_NATIVE_APP"]).resolve()
 data_dir = pathlib.Path(os.environ["WECHAT_DATA_DIR"])
-config = json.loads((app / "Contents/Frameworks/FridaGadget.config").read_text())
+config = json.loads((app / "Contents/Frameworks/FridaGadget.config").read_text(encoding="utf-8"))
 
 profile = check_payload(app)
-source = (package / "startup-notice.js").read_text() + "\n"
+source = (package / "startup-notice.js").read_text(encoding="utf-8") + "\n"
+source += (package / "gui-lifecycle.js").read_text(encoding="utf-8") + "\n"
 source += "globalThis.WECHAT_NATIVE_PROFILE=" + json.dumps(profile) + ";\n"
 support = os.environ["WECHAT_NATIVE_SUPPORT"]
 if (
@@ -28,16 +31,35 @@ if (
 ):
     raise RuntimeError("invalid_native_runtime")
 source += "globalThis.WECHAT_NATIVE_SUPPORT=" + json.dumps(str(app / "Contents/Frameworks" / support)) + ";\n"
-source += (package / "native-agent.js").read_text()
+source += (package / "native-agent.js").read_text(encoding="utf-8")
 endpoint = "127.0.0.1:" + str(config["interaction"]["port"])
 session = device = script = child = None
+output_lock = threading.Lock()
 
 
 def emit(value):
-    print(json.dumps(value), flush=True)
+    with output_lock:
+        print(json.dumps(value), flush=True)
+
+
+def detached(reason, crash=None):
+    emit(
+        {
+            "event": "stopped",
+            "reason": "wechat_closed" if reason == "process-terminated" else "bridge_disconnected",
+        }
+    )
+
+
+def script_message(message, data):
+    if message.get("type") == "error":
+        emit({"event": "stopped", "reason": "bridge_script_failed"})
+    if message.get("type") == "send" and message.get("payload") == {"event": "gui_closed"}:
+        emit({"event": "stopped", "reason": "gui_closed"})
 
 
 try:
+    check_instance(app / "Contents/MacOS/WeChat")
     digest = hashlib.sha256()
     with (app / "Contents/Resources/wechat.dylib").open("rb") as binary:
         for block in iter(lambda: binary.read(1048576), b""):
@@ -48,14 +70,7 @@ try:
     try:
         session = device.attach("Gadget")
     except frida.ServerNotRunningError:
-        snapshot = subprocess.run(
-            ["/bin/ps", "-axo", "pid=,comm="], check=True, capture_output=True, text=True, timeout=5
-        )
-        if any(
-            line.strip().split(None, 1)[-1] == "/Applications/WeChat.app/Contents/MacOS/WeChat"
-            for line in snapshot.stdout.splitlines()
-        ):
-            raise RuntimeError("stock_app_running")
+        check_instance(app / "Contents/MacOS/WeChat")
         child = subprocess.Popen(
             [str(app / "Contents/MacOS/WeChat")],
             stdin=subprocess.DEVNULL,
@@ -73,18 +88,22 @@ try:
                 time.sleep(0.2)
         else:
             raise RuntimeError("native_bridge_timeout")
+    session.on("detached", detached)
     script = session.create_script(source)
+    script.on("message", script_message)
     script.load()
     identity = script.exports_sync.startup_status()
     if pathlib.Path(identity["executable"]).resolve() != (app / "Contents/MacOS/WeChat").resolve():
         raise RuntimeError("native_process_identity_mismatch")
+    if not check_instance(app / "Contents/MacOS/WeChat", identity["pid"]):
+        raise RuntimeError("wechat_closed")
     # Resume a Gadget-waiting app even after an earlier gateway startup timed out.
     if child is not None or not identity.get("applicationRunning"):
         try:
             device.resume(identity["pid"])
         except frida.InvalidOperationError:
             pass
-    emit({"event": "ready"})
+    emit({"event": "ready", "protocol": 1, "pid": identity["pid"]})
     for line in sys.stdin:
         request = json.loads(line)
         try:
@@ -208,10 +227,16 @@ try:
                         break
             emit({"id": request["id"], "error": code})
 except Exception as error:
-    code = str(error) if isinstance(error, RuntimeError) else "native_bridge_unavailable"
+    code = getattr(
+        error, "code", str(error) if isinstance(error, RuntimeError) else "native_bridge_unavailable"
+    )
     emit({"event": "failure", "error": code})
 finally:
     if script is not None:
+        try:
+            script.exports_sync.dispose_gui()
+        except Exception:
+            pass
         try:
             script.unload()
         except Exception:

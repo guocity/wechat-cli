@@ -12,7 +12,7 @@ from pathlib import Path
 
 import frida
 
-from wechat_cli.config import ASSETS
+from wechat_cli.backends.macos.setup import ASSETS
 
 FIXTURE = r"""
 #import <AppKit/AppKit.h>

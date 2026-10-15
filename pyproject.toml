@@ -5,15 +5,25 @@ build-backend = "hatchling.build"
 [project]
 name = "wechat-cli"
 version = "0.1.0"
-description = "Local Python CLI, REST API and web interface for macOS WeChat"
+description = "Local Python CLI, REST API and web interface for macOS and Windows WeChat"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "ISC"
-dependencies = ["frida==17.8.0", "cryptography>=44,<49", "Pillow>=11,<13", "pilk>=0.2.4,<0.3", "truststore>=0.10,<1"]
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.34,<1",
+  "truststore>=0.10,<1",
+  "frida==17.8.0; sys_platform == 'darwin' or sys_platform == 'win32'",
+  "cryptography>=44,<49; sys_platform == 'darwin'",
+  "Pillow>=11,<13; sys_platform == 'darwin'",
+  "pilk>=0.2.4,<0.3; sys_platform == 'darwin'",
+  "zstandard>=0.23,<1; sys_platform == 'win32' and python_version < '3.14'",
+]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",
   "Operating System :: MacOS :: MacOS X",
+  "Operating System :: Microsoft :: Windows",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
 ]
@@ -22,7 +32,7 @@ classifiers = [
 wechat-cli = "wechat_cli.cli:main"
 
 [dependency-groups]
-dev = ["capstone>=5,<6", "pytest>=8,<10", "ruff>=0.11,<1", "twine>=6,<7"]
+dev = ["capstone>=5,<6", "pytest>=8,<10", "ruff>=0.11,<1", "twine>=6,<7", "cryptography>=44,<49", "Pillow>=11,<13", "pilk>=0.2.4,<0.3; sys_platform != 'win32' or python_version < '3.12'"]
 
 [tool.hatch.build.targets.wheel]
 core-metadata-version = "2.4"
@@ -30,7 +40,7 @@ packages = ["src/wechat_cli"]
 
 [tool.hatch.build.targets.sdist]
 core-metadata-version = "2.4"
-include = ["/src", "/tests", "/pyproject.toml", "/README.md", "/LICENSE", "/tools", "/validation/README.md"]
+include = ["/src", "/tests", "/pyproject.toml", "/README.md", "/LICENSE", "/tools", "/docs"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

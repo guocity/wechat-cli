@@ -4,8 +4,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from wechat_cli.errors import AppError
-from wechat_cli.models import resolve_message
+from wechat_cli.core.errors import AppError
+from wechat_cli.core.models import resolve_message
 
 
 def raw(server, path, method="GET", body=None, headers=None, host=None):
@@ -16,7 +16,7 @@ def raw(server, path, method="GET", body=None, headers=None, host=None):
         headers.setdefault("Content-Type", "application/json")
     connection.request(method, path, body=body, headers=headers)
     response = connection.getresponse()
-    result = response.status, dict(response.headers), response.read()
+    result = response.status, response.headers, response.read()
     connection.close()
     return result
 
@@ -134,7 +134,7 @@ def test_browser_session_requires_origin_and_blocks_csrf(api):
     assert raw(server, "/api/browser/session", "POST", {})[0] == 403
     status, headers, _ = raw(server, "/api/browser/session", "POST", {}, {"Origin": base})
     assert status == 200
-    assert "HttpOnly" in headers["Set-Cookie"] and "SameSite=Strict" in headers["Set-Cookie"]
+    assert "HttpOnly" in headers["Set-Cookie"] and "samesite=strict" in headers["Set-Cookie"].lower()
     cookie = headers["Set-Cookie"].split(";")[0]
     assert raw(server, "/api/native/chats", headers={"Cookie": cookie})[0] == 200
     payload = {"chatId": "filehelper", "text": "test"}
@@ -159,7 +159,7 @@ def test_browser_session_requires_origin_and_blocks_csrf(api):
         )[0]
         == 200
     )
-    server.browser_expires = 0
+    server.app.state.access.browser_expires = 0
     assert raw(server, "/api/native/chats", headers={"Cookie": cookie})[0] == 401
 
 
@@ -173,6 +173,42 @@ def test_static_assets_and_openapi(api):
     with pytest.raises(AppError) as caught:
         client.request("/api/not-a-route")
     assert caught.value.status == 404
+
+
+def test_generated_schema_describes_typed_inputs_and_auth(api):
+    _, client, _ = api
+    document = client.request("/api/openapi.json")
+    schema = document["components"]["schemas"]["TextInput"]
+    assert schema["additionalProperties"] is False
+    assert schema["properties"]["text"]["maxLength"] == 4096
+    assert "HTTPBearer" in document["components"]["securitySchemes"]
+    assert "requestBody" in document["paths"]["/api/messages/send"]["post"]
+
+
+def test_upload_limit_and_post_query_rejected_before_native_access(api):
+    server, client, native = api
+    headers = {
+        "Authorization": "Bearer " + client.token,
+        "Content-Type": "application/json",
+        "Content-Length": "70000",
+    }
+    assert raw(server, "/api/messages/send", "POST", "{}", headers)[0] == 413
+    with pytest.raises(AppError) as caught:
+        client.request(
+            "/api/messages/send?extra=1",
+            method="POST",
+            data={"chatId": "filehelper", "text": "x"},
+            key="post-query-key",
+        )
+    assert caught.value.code == "invalid_query"
+    assert native.calls == []
+
+
+def test_static_asset_query_cannot_select_arbitrary_file(api):
+    server, _, _ = api
+    status, _, content = raw(server, "/app.js?file=../../api-token&media=text/plain")
+    assert status == 200
+    assert content.startswith(b"'use strict';")
 
 
 def test_transcript_read_never_starts_conversion(api):

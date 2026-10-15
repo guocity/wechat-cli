@@ -1,4 +1,4 @@
-from wechat_cli.controls import matching_processes
+from wechat_cli.backends.macos.controls import matching_processes
 
 
 def test_process_identity_resolves_aliases_and_excludes_other_copies(tmp_path):

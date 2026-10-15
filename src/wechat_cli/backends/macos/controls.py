@@ -11,10 +11,11 @@ import time
 import unicodedata
 from pathlib import Path
 
-from .config import ASSETS, load_runtime, private_directory
-from .errors import AppError
-from .media import decode_upload
-from .setup import execute
+from wechat_cli.core.config import private_directory
+from wechat_cli.core.errors import AppError
+from wechat_cli.core.media import decode_upload
+
+from .setup import ASSETS, execute, load_runtime
 
 
 class Controls:
@@ -88,7 +89,7 @@ class Controls:
             raise AppError("native_control_busy", "Another control action is running", 409)
         try:
             name = self.chat_name(native, chat_id)
-            from .media import find_message
+            from wechat_cli.core.media import find_message
 
             message = find_message(native, chat_id, identifier)
             if message["kind"] != "file":
@@ -100,7 +101,7 @@ class Controls:
                 )
             self.invoke("attachment.download", chatName=name, fileName=message["details"]["fileName"])
             for _ in range(40):
-                result = native.request("attachmentData", {"chatId": chat_id, "id": identifier})
+                result = native.attachment_data(chat_id, identifier)
                 if len(result.get("files", [])) == 1:
                     return {"source": "native", "chatId": chat_id, "id": identifier, "status": "available"}
                 self.invoke("attachment.status", fileName=message["details"]["fileName"])
@@ -136,7 +137,7 @@ class Controls:
                 )
             if state.get("draft"):
                 raise AppError("native_draft_not_empty", "Clear or save the existing WeChat draft first", 409)
-            self_id = native.request("selfId")["id"]
+            self_id = native.self_id()
             before = {m["id"] for m in native.messages(chat_id, 100)["items"]}
             root = private_directory(self.directory / "outgoing")
             retained = []

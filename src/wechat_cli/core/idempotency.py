@@ -6,8 +6,9 @@ import sqlite3
 import threading
 import time
 
-from .config import private_directory
-from .errors import AppError
+from wechat_cli.core.config import private_directory
+from wechat_cli.core.errors import AppError
+from wechat_cli.host import private_permissions
 
 
 class Idempotency:
@@ -15,7 +16,7 @@ class Idempotency:
         private_directory(directory)
         path = directory / "requests.sqlite3"
         self.connection = sqlite3.connect(path, check_same_thread=False)
-        path.chmod(0o600)
+        private_permissions(path)
         self.lock = threading.Lock()
         self.connection.execute(
             "CREATE TABLE IF NOT EXISTS requests "

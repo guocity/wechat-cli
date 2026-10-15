@@ -223,6 +223,7 @@ let nativePendingRead=false,nativeTaskReadActive=false;
 let lastNativeFault=null;
 const observer = Process.attachModuleObserver({ onAdded: install });
 rpc.exports = {
+  disposeGui() { return globalThis.WECHAT_GUI_LIFECYCLE?.dispose?.(); },
   startupStatus() {
     let applicationRunning = null;
     try {
@@ -266,6 +267,7 @@ rpc.exports = {
     try {accountAvailable=accountContext().available;nativeState.failure=null;} catch(error) {nativeState.failure=error.message;}
     return { protocol: nativeState.protocol, state: nativeState.state, wechatVersion:nativeProfile.version, build:nativeProfile.build,
       installationNoticeSuppression:{installed:Boolean(globalThis.WECHAT_INSTALL_NOTICE?.installed),suppressed:globalThis.WECHAT_INSTALL_NOTICE?.suppressed??0},
+      guiLifecycle:{installed:Boolean(globalThis.WECHAT_GUI_LIFECYCLE?.installed), primaryVisible:globalThis.WECHAT_GUI_LIFECYCLE?.primaryVisible??0, seen:Boolean(globalThis.WECHAT_GUI_LIFECYCLE?.seen)},
       connected: accountAvailable, accountAvailable, installed: nativeState.installed,
       enumerationObserved: nativeState.enumerationObserved,
       chatCount: nativeState.chats.length, messageReadsObserved: nativeState.messageReadsObserved,

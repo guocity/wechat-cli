@@ -6,8 +6,8 @@ from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from PIL import Image
 
-from wechat_cli.errors import AppError
-from wechat_cli.media import (
+from wechat_cli.core.errors import AppError
+from wechat_cli.core.media import (
     cdn_url,
     decode_media,
     decode_upload,

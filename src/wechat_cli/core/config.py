@@ -6,18 +6,16 @@ import secrets
 import tempfile
 from pathlib import Path
 
-from .errors import AppError
+from wechat_cli.core.errors import AppError
+from wechat_cli.host import default_data_directory, private_permissions
 
-ASSETS = Path(__file__).parent / "assets"
+PACKAGE = Path(__file__).resolve().parents[1]
+WEB = PACKAGE / "web"
 
 
 def data_directory(value=None):
     return (
-        Path(
-            value
-            or os.environ.get("WECHAT_CLI_DATA_DIR")
-            or Path.home() / "Library/Application Support/wechat-cli"
-        )
+        Path(value or os.environ.get("WECHAT_CLI_DATA_DIR") or default_data_directory())
         .expanduser()
         .resolve()
     )
@@ -25,7 +23,7 @@ def data_directory(value=None):
 
 def private_directory(path):
     path.mkdir(parents=True, exist_ok=True, mode=0o700)
-    path.chmod(0o700)
+    private_permissions(path, directory=True)
     return path
 
 
@@ -33,7 +31,7 @@ def private_write(path, value):
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     fd, name = tempfile.mkstemp(dir=path.parent, prefix=".write-")
     try:
-        with os.fdopen(fd, "w") as output:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as output:
             output.write(value)
         os.replace(name, path)
     finally:
@@ -53,32 +51,10 @@ def api_token(directory):
     except FileExistsError:
         pass
     else:
-        with os.fdopen(fd, "w") as output:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as output:
             output.write(secrets.token_hex(32) + "\n")
-    token = path.read_text().strip()
+    token = path.read_text(encoding="utf-8").strip()
     if not 16 <= len(token) <= 512 or any(c.isspace() for c in token):
         raise AppError("invalid_api_token", f"Invalid API token in {path}", 424)
-    path.chmod(0o600)
+    private_permissions(path)
     return token
-
-
-def load_runtime(directory):
-    try:
-        value = json.loads((directory / "native-runtime.json").read_text())
-        app = Path(value["app"])
-        library = value["supportLibrary"]
-        if not app.is_absolute() or not isinstance(library, str):
-            raise ValueError()
-        if (
-            Path(library).name != library
-            or not library.startswith("native-reader-")
-            or not library.endswith(".dylib")
-        ):
-            raise ValueError()
-        if not (app / "Contents/Frameworks" / library).is_file():
-            raise ValueError()
-        return {"app": str(app.resolve()), "supportLibrary": library}
-    except (OSError, ValueError, KeyError, TypeError):
-        raise AppError(
-            "native_setup_required", "Run wechat-cli setup --app /path/to/patched/WeChat.app", 424
-        ) from None

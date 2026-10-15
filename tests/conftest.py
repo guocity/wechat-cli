@@ -1,15 +1,44 @@
+import socket
 import threading
+import time
 from contextlib import contextmanager
+from types import SimpleNamespace
 
 import pytest
+import uvicorn
 
+from wechat_cli.api.app import create_app
 from wechat_cli.client import ApiClient
-from wechat_cli.models import resolve_message
-from wechat_cli.server import ApiServer
+from wechat_cli.core.models import resolve_message
 
 
 class FakeNative:
+    name = "fake"
+    stop_reason = None
+
+    def connect(self):
+        pass
+
+    def is_alive(self):
+        return self.alive and not self.closed
+
+    def capabilities(self):
+        return {"nativeBridge": True, "chatHistory": True, "sendMessages": True, "voiceSending": True}
+
+    def self_id(self):
+        return self.account
+
+    def transcription_result(self, chat_id, identifier):
+        return self.request("voiceTranscriptionResult", {"chatId": chat_id, "id": identifier})
+
+    def transcribe_voice(self, chat_id, identifier):
+        return self.request("transcribeVoice", {"chatId": chat_id, "id": identifier})
+
+    def prepare_text(self, chat_id, text):
+        return self.request("prepareText", {"chatId": chat_id, "text": text})
+
     def __init__(self):
+        self.alive = True
         self.calls = []
         self.observed = {"connected": True}
         self.closed = False
@@ -56,17 +85,51 @@ class FakeNative:
 
 
 @contextmanager
-def running_server(directory, native=None):
+def running_server(directory, native=None, *, singleton=False):
     native = native or FakeNative()
-    server = ApiServer(("127.0.0.1", 0), directory, native=native)
-    thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.01})
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    address = sock.getsockname()
+    app = create_app(directory, backend=native, singleton=singleton, monitor_interval=0.02)
+    runner = uvicorn.Server(
+        uvicorn.Config(
+            app,
+            access_log=False,
+            log_config=None,
+            log_level="critical",
+            proxy_headers=False,
+            timeout_graceful_shutdown=1,
+        )
+    )
+    app.state.shutdown = lambda: setattr(runner, "should_exit", True)
+
+    def run():
+        try:
+            runner.run(sockets=[sock])
+        except SystemExit:
+            if not app.state.startup_error:
+                raise
+
+    thread = threading.Thread(target=run, daemon=True)
     thread.start()
+    deadline = time.monotonic() + 5
+    while not runner.started and thread.is_alive() and time.monotonic() < deadline:
+        time.sleep(0.005)
+    if not runner.started:
+        runner.should_exit = True
+        thread.join(timeout=3)
+        sock.close()
+        raise app.state.startup_error or RuntimeError("Test Uvicorn did not start")
+    server = SimpleNamespace(
+        directory=directory, server_address=address, app=app, runner=runner, thread=thread
+    )
     try:
-        yield server, ApiClient(directory, server.server_address[1]), native
+        yield server, ApiClient(directory, address[1]), native
     finally:
-        server.shutdown()
+        runner.should_exit = True
         thread.join(timeout=5)
-        server.server_close()
+        sock.close()
+        assert not thread.is_alive(), "Uvicorn did not shut down"
 
 
 @pytest.fixture

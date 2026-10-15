@@ -1,9 +1,11 @@
 'use strict';
 const el = id => document.getElementById(id);
-let selected = '', chats = [], busy = false, sequence = 0;
+let selected = '', chats = [], busy = false, sequence = 0, offline = false;
 const attempts = new Map(), urls = new Set();
+let capabilities={};
 const authenticated = fetch('/api/browser/session', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(async r=>{if(!r.ok)throw Error((await r.json()).message);});
 async function api(path, data, binary=false) {
+  if(offline)throw Error('WeChat session closed. Start wechat-cli again and reload this page.');
   await authenticated;
   const options={headers:{}};
   if(data!==undefined){
@@ -11,27 +13,42 @@ async function api(path, data, binary=false) {
     if(!attempts.has(signature))attempts.set(signature,crypto.randomUUID());
     options.method='POST';options.headers={'Content-Type':'application/json','Idempotency-Key':attempts.get(signature)};options.body=JSON.stringify(data);
   }
-  const response=await fetch(path,options);
+  let response;
+  try{response=await fetch(path,options);}catch(error){disconnected();throw error;}
   if(!response.ok){const error=await response.json();throw Error(error.message||error.error);}
   const result=binary?await response.blob():await response.json();
   if(data!==undefined)attempts.delete(path+JSON.stringify(data));
   return result;
 }
-function sync(){el('text').disabled=!selected||busy;el('send').disabled=!selected||busy||!el('text').value.trim();el('send-file').disabled=!selected||busy||!el('file').files.length;el('history').disabled=!selected||busy;}
-async function action(task){try{await task();}catch(error){el('status').textContent=error.message;}}
+function sync(){el('text').disabled=offline||!capabilities.sendMessages||!selected||busy;el('send').disabled=offline||!capabilities.sendMessages||!selected||busy||!el('text').value.trim();el('send-file').disabled=offline||!selected||busy||!el('file').files.length||!(el('file-kind').value==='file'?capabilities.fileSending:capabilities.voiceSending);el('history').disabled=offline||!selected||busy;}
+function disconnected(){
+  if(offline)return;offline=true;sequence++;
+  document.querySelectorAll('button,input,textarea,select').forEach(control=>{control.disabled=true;});
+  el('status').textContent='WeChat session closed. Start wechat-cli again and reload this page.';
+}
+async function monitor(){
+  if(offline)return;
+  try{
+    await authenticated;
+    const response=await fetch('/api/health',{signal:AbortSignal.timeout(3000)});
+    if(!response.ok||(await response.json()).status!=='ok')return disconnected();
+  }catch(_){return disconnected();}
+  setTimeout(monitor,2000);
+}
+async function action(task){try{await task();}catch(error){if(!offline)el('status').textContent=error.message;}}
 function renderChats(){
   el('chats').replaceChildren();const q=el('search').value.toLocaleLowerCase();
   for(const chat of chats){
     if(!((chat.displayName||chat.displayString||'')+' '+chat.id).toLocaleLowerCase().includes(q))continue;
     const button=document.createElement('button'),name=document.createElement('strong'),meta=document.createElement('small');
-    button.type='button';button.disabled=busy||chat.chatType==='folder';button.setAttribute('aria-current',String(chat.id===selected));
+    button.type='button';button.disabled=offline||busy||chat.chatType==='folder';button.setAttribute('aria-current',String(chat.id===selected));
     name.textContent=(chat.isPinned?'📌 ':'')+(chat.displayName||chat.displayString||chat.id);
     meta.textContent=chat.lastMessageTime?new Date(chat.lastMessageTime*1000).toLocaleString():chat.id;
     button.append(name,meta);button.onclick=()=>action(async()=>{selected=chat.id;el('title').textContent=name.textContent;renderChats();sync();await history();});el('chats').append(button);
   }
 }
-async function refresh(){const result=await api('/api/native/chats');chats=result.items;renderChats();el('status').textContent=`${chats.length} conversations. Pinned first, then recent.`;}
-function button(article,label,task){const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=()=>action(async()=>{b.disabled=true;try{await task();}finally{b.disabled=false;}});article.append(b);}
+async function refresh(){const result=await api('/api/native/chats');chats=result.items;renderChats();el('status').textContent=`${chats.length} conversations. ${result.order==='pinned_then_recent'?'Pinned first, then recent.':'Most recent first.'}`;}
+function button(article,label,task){const b=document.createElement('button');b.type='button';b.disabled=offline;b.textContent=label;b.onclick=()=>action(async()=>{b.disabled=true;try{await task();}finally{b.disabled=offline;}});article.append(b);}
 async function history(){
   const chatId=selected,request=++sequence;if(!chatId)return;
   const result=await api('/api/native/messages?'+new URLSearchParams({chatId,limit:el('limit').value}));
@@ -42,7 +59,7 @@ async function history(){
     meta.textContent=(message.senderName||message.groupSender||message.from||'Unknown sender')+' · '+(message.timestamp?new Date(message.timestamp*1000).toLocaleString():'')+' · '+message.typeLabel;
     text.textContent=message.displaySummary||message.summary;article.append(meta,text);
     const params={chatId,id:message.id};
-    if(['image','sticker','video','voice','file'].includes(message.kind))button(article,message.kind==='file'?'Download file':'Load media',async()=>{
+    if(capabilities.mediaPreviews&&['image','sticker','video','voice','file'].includes(message.kind))button(article,message.kind==='file'?'Download file':'Load media',async()=>{
       const blob=await api('/api/native/media?'+new URLSearchParams(params),undefined,true);
       if(request!==sequence)return;
       const url=URL.createObjectURL(blob);urls.add(url);
@@ -50,9 +67,9 @@ async function history(){
       else if(blob.type.startsWith('audio/')||blob.type.startsWith('video/')){const player=document.createElement(blob.type.startsWith('audio/')?'audio':'video');player.controls=true;player.src=url;article.append(player);}
       else{const link=document.createElement('a');link.href=url;link.download=message.details.fileName||'attachment';link.textContent='Save '+link.download;article.append(link);link.click();}
     });
-    if(message.kind==='file')button(article,'Fetch in WeChat',async()=>{el('status').textContent=JSON.stringify(await api('/api/native/attachments/download',params));});
-    if(message.kind==='image')button(article,'Extract text',async()=>{const r=await api('/api/native/images/text',params);const p=document.createElement('p');p.textContent=r.text;article.append(p);});
-    if(message.kind==='voice'){
+    if(capabilities.mediaPreviews&&message.kind==='file')button(article,'Fetch in WeChat',async()=>{el('status').textContent=JSON.stringify(await api('/api/native/attachments/download',params));});
+    if(capabilities.imageTextExtraction&&message.kind==='image')button(article,'Extract text',async()=>{const r=await api('/api/native/images/text',params);const p=document.createElement('p');p.textContent=r.text;article.append(p);});
+    if(capabilities.voiceToText&&message.kind==='voice'){
       button(article,'Transcribe',async()=>{const r=await api('/api/native/voice/transcribe',params);el('status').textContent=r.text||r.status;});
       button(article,'Read transcript',async()=>{const r=await api('/api/native/voice/transcript?'+new URLSearchParams(params));el('status').textContent=r.text||r.status;});
     }
@@ -75,5 +92,5 @@ el('upload').onsubmit=event=>{event.preventDefault();action(async()=>{
   }finally{busy=false;sync();renderChats();}
 });};
 el('refresh').onclick=()=>action(refresh);el('history').onclick=()=>action(history);el('connection').onclick=()=>action(async()=>{el('status').textContent=JSON.stringify(await api('/api/native/status'),null,2);});
-el('search').oninput=renderChats;el('text').oninput=sync;el('file').onchange=sync;el('limit').onchange=()=>action(history);
-action(refresh);
+el('search').oninput=renderChats;el('text').oninput=sync;el('file').onchange=sync;el('file-kind').onchange=sync;el('limit').onchange=()=>action(history);
+action(async()=>{capabilities=await api('/api/capabilities');el('upload').hidden=!(capabilities.fileSending||capabilities.voiceSending);await refresh();sync();});monitor();

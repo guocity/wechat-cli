@@ -4,7 +4,7 @@ import math
 import struct
 import wave
 
-from wechat_cli.media import codec, prepare_voice, silk_duration, voice_preview
+from wechat_cli.core.media import codec, prepare_voice, silk_duration, voice_preview
 
 
 def test_real_silk_round_trip_and_wav_input():

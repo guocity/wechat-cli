@@ -1,11 +1,12 @@
 import hashlib
 import json
+import os
 import time
 
 import pytest
 
-from wechat_cli.errors import AppError
-from wechat_cli.idempotency import Idempotency
+from wechat_cli.core.errors import AppError
+from wechat_cli.core.idempotency import Idempotency
 
 
 def test_receipts_survive_restart(tmp_path):
@@ -23,7 +24,8 @@ def test_receipts_survive_restart(tmp_path):
     assert attempts == [True]
     store.close()
     assert b"private" not in (tmp_path / "requests.sqlite3").read_bytes()
-    assert (tmp_path / "requests.sqlite3").stat().st_mode & 0o777 == 0o600
+    if os.name != "nt":
+        assert (tmp_path / "requests.sqlite3").stat().st_mode & 0o777 == 0o600
 
 
 def test_crash_intent_prevents_resending(tmp_path):

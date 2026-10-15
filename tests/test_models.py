@@ -1,6 +1,6 @@
 import json
 
-from wechat_cli.models import media_descriptor, resolve_chat, resolve_message, xml
+from wechat_cli.core.models import media_descriptor, resolve_chat, resolve_message, xml
 
 
 def test_xml_is_bounded_and_rejects_entities():
