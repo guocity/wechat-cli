@@ -6,6 +6,7 @@ import zipfile
 from pathlib import Path
 
 REQUIRED = {
+    "wechat_cli/core/dependencies.py",
     "wechat_cli/compatibility/windows.json",
     "wechat_cli/compatibility/windows-x64/4.1.15.53.json",
     "wechat_cli/backends/windows/assets/agent.js",

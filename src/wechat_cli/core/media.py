@@ -13,10 +13,7 @@ import wave
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
-from cryptography.hazmat.primitives import padding
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from PIL import Image
-
+from wechat_cli.core.dependencies import require_modules
 from wechat_cli.core.errors import AppError
 from wechat_cli.core.models import media_descriptor
 from wechat_cli.core.network import NoRedirect, ssl_context
@@ -78,6 +75,10 @@ def decode_media(data, key=None):
         if (mime_type(probe) or "").startswith("image/"):
             return bytes(x ^ xor for x in data)
     if isinstance(key, str) and re.fullmatch(r"[a-fA-F0-9]{32}", key) and len(data) % 16 == 0:
+        require_modules(("cryptography",))
+        from cryptography.hazmat.primitives import padding
+        from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+
         secret = bytes.fromhex(key)
         for mode in [modes.CBC(bytes(16)), modes.CBC(secret), modes.ECB()]:
             try:
@@ -225,6 +226,9 @@ def read_media(native, chat_id, identifier, variant="full"):
 
 
 def validate_image(data):
+    require_modules(("PIL",))
+    from PIL import Image
+
     if not 1 <= len(data) <= 8 * 1024**2:
         raise AppError("image_too_large", "OCR images must be 1 byte through 8 MiB", 413)
     try:
@@ -271,7 +275,7 @@ def codec(action, data, rate=24000):
         if importlib.util.find_spec("pilk") is None:
             raise AppError(
                 "audio_extra_required",
-                "SILK codec is missing; reinstall wechat-cli with its dependencies",
+                "SILK codec is missing; run uvx --refresh wechat-cli setup on macOS",
                 424,
             )
         with tempfile.TemporaryDirectory(prefix="wechat-audio-") as temporary:

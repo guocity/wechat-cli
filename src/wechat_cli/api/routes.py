@@ -78,6 +78,8 @@ def send_file(svc: Service, payload: FileInput, key: Key = None):
 
 @router.post("/messages/voice")
 def send_voice(svc: Service, payload: VoiceInput, key: Key = None):
+    if not svc.backend.capabilities().get("voiceSending"):
+        raise AppError("native_feature_unavailable", "Voice sending is unavailable on this backend", 424)
     data = payload.model_dump(exclude_none=True)
     prepared = prepare_voice(data)
     return svc.once(

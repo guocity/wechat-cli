@@ -23,7 +23,7 @@ class FakeNative:
         return self.alive and not self.closed
 
     def capabilities(self):
-        return {"nativeBridge": True, "chatHistory": True, "sendMessages": True}
+        return {"nativeBridge": True, "chatHistory": True, "sendMessages": True, "voiceSending": True}
 
     def self_id(self):
         return self.account

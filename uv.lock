@@ -425,14 +425,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/7d/83/d79a51efd42766777
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a4/13/d065cf197bcc613568d2fdfc6488b77ff8e944762bf950af11401bae58c7/frida-17.8.0-cp37-abi3-macosx_10_13_x86_64.whl", hash = "sha256:47534a802d47c8875baad08d495dc50b4a05ac8765c7033adfc48aac1c720301", size = 23104076, upload-time = "2026-03-09T11:35:39.351Z" },
     { url = "https://files.pythonhosted.org/packages/92/d9/19602ea75f008e29fc8f11f4da2523bedd60da3a1a0479f0dcfceca166c9/frida-17.8.0-cp37-abi3-macosx_11_0_arm64.whl", hash = "sha256:e811323d9dc8a12f60ea63535c1975c1ee19f872d6dcd1d8f3a171c74ea04a97", size = 32462621, upload-time = "2026-03-09T11:35:43.952Z" },
-    { url = "https://files.pythonhosted.org/packages/56/f1/dd25b6d5ffaffec2d1f64db794f4b03f59ebe3b0bf1fa12e1b8599b084d2/frida-17.8.0-cp37-abi3-manylinux1_i686.whl", hash = "sha256:eb2ee69459780ce6d6d8409abf47a65b899ce48fc1bb344e31c91f398b5c13ce", size = 20652101, upload-time = "2026-03-09T11:35:47.457Z" },
-    { url = "https://files.pythonhosted.org/packages/b3/92/93067c1b916fda1468b36912d4bf9c0ed1d8a8758db278afb99811e314cf/frida-17.8.0-cp37-abi3-manylinux1_x86_64.whl", hash = "sha256:f45a791ef3ad2d7ee13c5cc9cb00edc573cd558d2364c30c6a14f970a551fd5f", size = 32862890, upload-time = "2026-03-09T11:35:51.015Z" },
-    { url = "https://files.pythonhosted.org/packages/9f/9c/4693b01aa04b8f5f0aaca6a770e651c7a0698b0f287852da29afafcb895c/frida-17.8.0-cp37-abi3-manylinux2014_aarch64.whl", hash = "sha256:3186726cba8cd7be3e177b006812e3beb0faafdda77eb5d4c78db7eb4a172d25", size = 21455002, upload-time = "2026-03-09T11:35:54.947Z" },
-    { url = "https://files.pythonhosted.org/packages/f7/35/8dc21f1e6a3aa151503b4f61f0ce9ea86f94596a4bc61fa288a16b6c022d/frida-17.8.0-cp37-abi3-manylinux2014_armv7l.whl", hash = "sha256:ab5ae7eb56732da5c44d87b88e1598ff9c4d7d1e1062f9872f597bb766d70185", size = 19300596, upload-time = "2026-03-09T11:35:58.868Z" },
-    { url = "https://files.pythonhosted.org/packages/2e/62/0a6c4c77d15e70885f7ebed62ced46cb48b7fde1d7f05127bae05a23247b/frida-17.8.0-cp37-abi3-manylinux_2_17_aarch64.whl", hash = "sha256:d3f5b837e3ba9b6d1542f72ca81bb29c2c1db24c1946459c8e67fb39af473dcd", size = 21455009, upload-time = "2026-03-09T11:36:01.784Z" },
-    { url = "https://files.pythonhosted.org/packages/9a/40/74acadf9a01ec35691b046a26cfd50ac1bbd24191b880b7945797b6819dd/frida-17.8.0-cp37-abi3-manylinux_2_17_armv7l.whl", hash = "sha256:57025f28cc8ce373cdcec46d9907c017dd1baaff88978c752255be5874d7746c", size = 19300597, upload-time = "2026-03-09T11:36:05.262Z" },
-    { url = "https://files.pythonhosted.org/packages/9a/8c/2e5ae55a90901285750772396bf8f4cbe500a11fc7a364e25ef48772d855/frida-17.8.0-cp37-abi3-manylinux_2_5_i686.whl", hash = "sha256:da1be9ec01fa5f451a6397e9eb84ca7d34a2a65b383b74a17252f167e2101835", size = 20652104, upload-time = "2026-03-09T11:36:08.869Z" },
-    { url = "https://files.pythonhosted.org/packages/41/91/b4486e11a5cd989c139ec26f1007a9b6733a8c9e95155077a4e4424a1949/frida-17.8.0-cp37-abi3-manylinux_2_5_x86_64.whl", hash = "sha256:6415ad35a3df81c6b8eda0ff8f15ef58bd780dce4ef8036c437b7cf58b5911c3", size = 32862894, upload-time = "2026-03-09T11:36:12.757Z" },
     { url = "https://files.pythonhosted.org/packages/6d/1c/a5c915f6fa66af53974915ac980e79faf58dbbdf1874d72a190a4f85adc8/frida-17.8.0-cp37-abi3-win32.whl", hash = "sha256:22fb30b17b1480b0f272571eeafec564854650752b412171bed716edd0c42e78", size = 39257950, upload-time = "2026-03-09T11:36:16.805Z" },
     { url = "https://files.pythonhosted.org/packages/3a/da/3f52498fe92aae6df29cc242e68c0b647cc85c35a236e62ef870ebfb1b7c/frida-17.8.0-cp37-abi3-win_amd64.whl", hash = "sha256:717ee3c867f7b8c684106ae3021fb2bdb163c4c842ff11244428dd547ddcd678", size = 41897218, upload-time = "2026-03-09T11:36:22.722Z" },
     { url = "https://files.pythonhosted.org/packages/1a/a5/d2122b2374fd469dd36abdadb5b17d1a74a018c6313542f24373fab0a0bd/frida-17.8.0-cp37-abi3-win_arm64.whl", hash = "sha256:0b06a55751282854258bdabf65968344f721107937504c0470c388eb85787332", size = 51798658, upload-time = "2026-03-09T11:36:27.003Z" },
@@ -1125,11 +1117,11 @@ name = "wechat-cli"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "cryptography" },
+    { name = "cryptography", marker = "sys_platform == 'darwin'" },
     { name = "fastapi" },
-    { name = "frida" },
-    { name = "pilk", marker = "python_full_version < '3.12' or sys_platform != 'win32'" },
-    { name = "pillow" },
+    { name = "frida", marker = "sys_platform == 'darwin' or sys_platform == 'win32'" },
+    { name = "pilk", marker = "sys_platform == 'darwin'" },
+    { name = "pillow", marker = "sys_platform == 'darwin'" },
     { name = "truststore" },
     { name = "uvicorn" },
     { name = "zstandard", marker = "python_full_version < '3.14' and sys_platform == 'win32'" },
@@ -1138,6 +1130,9 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "capstone" },
+    { name = "cryptography" },
+    { name = "pilk", marker = "python_full_version < '3.12' or sys_platform != 'win32'" },
+    { name = "pillow" },
     { name = "pytest" },
     { name = "ruff" },
     { name = "twine" },
@@ -1145,11 +1140,11 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "cryptography", specifier = ">=44,<49" },
+    { name = "cryptography", marker = "sys_platform == 'darwin'", specifier = ">=44,<49" },
     { name = "fastapi", specifier = ">=0.115,<1" },
-    { name = "frida", specifier = "==17.8.0" },
-    { name = "pilk", marker = "python_full_version < '3.12' or sys_platform != 'win32'", specifier = ">=0.2.4,<0.3" },
-    { name = "pillow", specifier = ">=11,<13" },
+    { name = "frida", marker = "sys_platform == 'darwin' or sys_platform == 'win32'", specifier = "==17.8.0" },
+    { name = "pilk", marker = "sys_platform == 'darwin'", specifier = ">=0.2.4,<0.3" },
+    { name = "pillow", marker = "sys_platform == 'darwin'", specifier = ">=11,<13" },
     { name = "truststore", specifier = ">=0.10,<1" },
     { name = "uvicorn", specifier = ">=0.34,<1" },
     { name = "zstandard", marker = "python_full_version < '3.14' and sys_platform == 'win32'", specifier = ">=0.23,<1" },
@@ -1158,6 +1153,9 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "capstone", specifier = ">=5,<6" },
+    { name = "cryptography", specifier = ">=44,<49" },
+    { name = "pilk", marker = "python_full_version < '3.12' or sys_platform != 'win32'", specifier = ">=0.2.4,<0.3" },
+    { name = "pillow", specifier = ">=11,<13" },
     { name = "pytest", specifier = ">=8,<10" },
     { name = "ruff", specifier = ">=0.11,<1" },
     { name = "twine", specifier = ">=6,<7" },

@@ -9,7 +9,16 @@ description = "Local Python CLI, REST API and web interface for macOS and Window
 readme = "README.md"
 requires-python = ">=3.11"
 license = "ISC"
-dependencies = ["fastapi>=0.115,<1", "uvicorn>=0.34,<1", "frida==17.8.0", "cryptography>=44,<49", "Pillow>=11,<13", "pilk>=0.2.4,<0.3; sys_platform != 'win32' or python_version < '3.12'", "zstandard>=0.23,<1; sys_platform == 'win32' and python_version < '3.14'", "truststore>=0.10,<1"]
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.34,<1",
+  "truststore>=0.10,<1",
+  "frida==17.8.0; sys_platform == 'darwin' or sys_platform == 'win32'",
+  "cryptography>=44,<49; sys_platform == 'darwin'",
+  "Pillow>=11,<13; sys_platform == 'darwin'",
+  "pilk>=0.2.4,<0.3; sys_platform == 'darwin'",
+  "zstandard>=0.23,<1; sys_platform == 'win32' and python_version < '3.14'",
+]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",
@@ -23,7 +32,7 @@ classifiers = [
 wechat-cli = "wechat_cli.cli:main"
 
 [dependency-groups]
-dev = ["capstone>=5,<6", "pytest>=8,<10", "ruff>=0.11,<1", "twine>=6,<7"]
+dev = ["capstone>=5,<6", "pytest>=8,<10", "ruff>=0.11,<1", "twine>=6,<7", "cryptography>=44,<49", "Pillow>=11,<13", "pilk>=0.2.4,<0.3; sys_platform != 'win32' or python_version < '3.12'"]
 
 [tool.hatch.build.targets.wheel]
 core-metadata-version = "2.4"

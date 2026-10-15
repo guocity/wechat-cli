@@ -34,7 +34,7 @@ The smoke tool is read-only unless `--send-file-transfer` is explicitly supplied
 
 Windows: **114 passed, 1 skipped**. The skip checks macOS destination-parent POSIX permissions. macOS: **114 passed, 1 skipped**. Coverage includes HTTP authentication, browser origin/session checks, validation, durable idempotency, Unicode subprocess transport, server shutdown, instance locks, payload tamper detection, bound history queries, exact integer IDs and failed-upgrade rollback. These tests use a fake backend; the live native results above are separate.
 
-The wheel installs and runs outside the checkout on macOS and Windows, including Windows Python **3.15**, without a compiler for core operations. Windows Python 3.12+ omits the unused SILK codec; Python 3.14+ uses standard-library Zstandard decoding. Windows Python 3.11 uses the available codec and Zstandard wheels. Wheel contents, metadata and entry point pass `tools/check_wheel.py` and Twine validation.
+The wheel installs and runs outside the checkout on macOS and Windows, including Windows Python **3.15**, without a compiler for core operations. Windows runtime installations omit Cryptography, Pillow and the SILK codec on every Python version. Python 3.11–3.13 installs the Zstandard wheel; Python 3.14+ uses standard-library Zstandard decoding. The development group includes media libraries only to exercise the shared macOS regression tests. Wheel contents, metadata and entry point pass `tools/check_wheel.py` and Twine validation.
 
 State directories, tokens, locks and the request ledger use protected NTFS DACLs for the current user SID, SYSTEM and Administrators. The live API token's ACL was checked for protected inheritance and those principals; POSIX `chmod` is not used as an NTFS privacy guarantee.
 
@@ -45,3 +45,9 @@ Closing the fresh native login window stopped Uvicorn and released the API port.
 The fresh signed-in managed copy returned 102 chats and the single previously verified File Transfer record. A native minimize/restore preserved the service. Hiding its main window stopped the service; startup restored the saved main window in the same signed-in process. No additional messages were sent for these checks.
 
 The built wheel was also run from outside the repository using `uv tool run --python 3.15 --from <wheel> wechat-cli start`. Its Python 3.15 server passed the same read-only 102-chat/one-history-record/native-preparation smoke check and shut down through the installed CLI. A standard-library Zstandard compression/decode round trip also passed. Test APIs were stopped afterward; WeChat remained signed in.
+
+## Automatic platform dependencies
+
+The normal `uvx wechat-cli` invocation now uses wheel dependency markers, without extras or a platform prompt. Windows runtime installs omit Pillow, Cryptography and pilk; macOS retains them. Shared API imports do not load those optional media libraries, and unsupported Windows voice requests are rejected before codec preparation.
+
+The updated macOS suite passed **124 tests, 1 skipped**, and a fresh production wheel environment selected only macOS dependencies. Actual uv resolution for Windows Python 3.11 and 3.15 confirmed the lean dependency sets; marker tests also cover Windows 3.13/3.14 and macOS 3.11/3.15. The Windows machine's SSH and RDP ports were unreachable during this packaging follow-up, so its live runtime was not retested or resynchronized for this change. The prior native validation above remains the result for commit `293e84d`.

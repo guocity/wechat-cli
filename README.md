@@ -1,6 +1,6 @@
 # wechat-cli
 
-A Python CLI, authenticated local REST API, Python client and web interface for a signed-in macOS or Windows WeChat session. Node.js and npm are not required. `uvx` installs Python dependencies, including Frida, into its own environment.
+A Python CLI, authenticated local REST API, Python client and web interface for a signed-in macOS or Windows WeChat session. Node.js and npm are not required. `uvx` automatically selects dependencies for the current operating system and installs them into its own environment. No `[mac]`/`[win]` extra or platform prompt is needed.
 
 ## Quick start
 
@@ -12,6 +12,10 @@ uvx wechat-cli start
 uvx wechat-cli chats
 uvx wechat-cli web
 ```
+
+Dependency selection uses standard Python environment markers during installation. Both platforms install FastAPI, Uvicorn, OS TLS trust and Frida. macOS additionally installs Cryptography, Pillow and the SILK codec. Windows omits those media packages; Python 3.11–3.13 adds Zstandard, while Python 3.14+ uses the standard library. Runtime imports of macOS media libraries are lazy, so Windows can start its server without them. Developer test dependencies are separate and are not installed by `uvx`.
+
+The same small wheel contains both backend modules and their source assets; platform markers select dependencies, not wheel files. No vendor app or native helper binary is bundled. Separate platform distributions would add release and version coordination without materially reducing this wheel.
 
 On macOS, `setup` downloads WeChat 4.1.15 from Tencent and Frida Gadget 17.8.0 from the upstream Frida release. It verifies the Gadget archive's SHA-256, the downloaded app's Tencent signature and its supported payload fingerprint, mounts the installer read-only, and prepares a separate app in:
 
