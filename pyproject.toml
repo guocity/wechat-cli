@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "wechat-cli"
+version = "0.1.0"
+description = "Local Python CLI, REST API and web interface for macOS WeChat"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "ISC"
+dependencies = ["frida==17.8.0", "cryptography>=44,<49", "Pillow>=11,<13", "pilk>=0.2.4,<0.3", "truststore>=0.10,<1"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Operating System :: MacOS :: MacOS X",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+]
+
+[project.scripts]
+wechat-cli = "wechat_cli.cli:main"
+
+[dependency-groups]
+dev = ["capstone>=5,<6", "pytest>=8,<10", "ruff>=0.11,<1", "twine>=6,<7"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wechat_cli"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/src", "/tests", "/pyproject.toml", "/README.md", "/LICENSE", "/tools", "/validation/README.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]

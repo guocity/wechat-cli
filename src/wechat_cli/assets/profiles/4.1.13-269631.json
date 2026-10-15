@@ -1,0 +1,182 @@
+{
+  "version": "4.1.13",
+  "build": "269631",
+  "arch": "arm64",
+  "payloadSha256": "964f653977f7e6d00400804eb492e230528c8e8e0653db6300e9b913e49973a9",
+  "taskContextTlsOffset": "0x9d84780",
+  "sessionServiceMarkerOffset": "0x98e8910",
+  "voiceFrontDescriptorOffset": "0x975cf38",
+  "enumeration": {
+    "offset": "0x2955438",
+    "signature": "fa67bba9f85f01a9f65702a9f44f03a9fd7b04a9fd030191ff0308d1f30308aa",
+    "scanPattern": "fa 67 bb a9 f8 5f 01 a9 f6 57 02 a9 f4 4f 03 a9 fd 7b 04 a9 fd 03 01 91 ff 03 08 d1 f3 03 08 aa f5 c3 02 91 08 6a 03 b0 08 29 46 f9 08 01 40 f9 a8 83 1b f8 6c 04 11 95 f4 03 00 aa 00 e4 00 6f 60 02 00 ad 08 f0 a7 d2 48 55 d5 f2 48 55 f5 f2 68 12 00 f9 40 e5 05 4f a0 02 00 ad a8 aa ca 92 48 55 f5 f2 e8 6b 00 f9 05 0c 67 94 08 00 40 f9 09 35 40 f9 e8 63 03 91 20 01 3f d6 e0 6f 40 f9 : ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff 1f 00 00 9f ff ff ff ff ff ff ff ff ff ff ff ff 00 00 00 fc ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff 00 00 00 fc ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff"
+  },
+  "initialMessages": {
+    "offset": "0x2ec93ac",
+    "signature": "fc6fbaa9fa6701a9f85f02a9f65703a9f44f04a9fd7b05a9fd430191ff830cd1"
+  },
+  "pagedMessages": {
+    "offset": "0x2eca50c",
+    "signature": "fc6fbaa9fa6701a9f85f02a9f65703a9f44f04a9fd7b05a9fd430191ff430cd1"
+  },
+  "mapNodeDestructor": {
+    "offset": "0x295a0b4",
+    "signature": "c10400b4f44fbea9fd7b01a9fd430091f30301aa06000014e00313aa010b8052"
+  },
+  "accountServices": {
+    "offset": "0x16a3010",
+    "signature": "0aa442a90a2500a9890000b42821009129008052080129f8c0035fd6ffc300d1"
+  },
+  "serviceRegistry": {
+    "offset": "0x419de60",
+    "signature": "ffc302d1fa6706a9f85f07a9f65708a9f44f09a9fd7b0aa9fd830291f40301aa"
+  },
+  "cachedMessageService": {
+    "offset": "0x41f2224",
+    "signature": "ff8301d1f85f02a9f65703a9f44f04a9fd7b05a9fd430191f40300aaf30308aa"
+  },
+  "createMessageServiceTask": {
+    "offset": "0x62b54b0",
+    "signature": "ff4301d1f44f03a9fd7b04a9fd030191f40300aaf30308aae8f301b2e8a301a9"
+  },
+  "messageUiConversion": {
+    "offset": "0x2f00fb4",
+    "signature": "fc6fbaa9fa6701a9f85f02a9f65703a9f44f04a9fd7b05a9fd430191ff8315d1"
+  },
+  "messageUiDestructor": {
+    "offset": "0x38ac7c",
+    "signature": "f44fbea9fd7b01a9fd430091f30300aa009841f9c00000b4140040f901038052"
+  },
+  "sendInfoConstructor": {
+    "offset": "0x6810c4",
+    "signature": "f44fbea9fd7b01a9fd430091f40301aaf30300aae003679e0004186e0080803c"
+  },
+  "sendResultDestructor": {
+    "offset": "0x2e92ab8",
+    "signature": "f657bda9f44f01a9fd7b02a9fd830091f30300aa141040f9d40300b4751640f9"
+  },
+  "sendFailureCtor": {
+    "offset": "0x2dff4a0",
+    "signature": "1f0000391f00013901080929c0035fd6ff8302d1fa6705a9f85f06a9f65707a9"
+  },
+  "sessionService": {
+    "offset": "0x419de60",
+    "signature": "ffc302d1fa6706a9f85f07a9f65708a9f44f09a9fd7b0aa9fd830291f40301aa"
+  },
+  "sessionDestructor": {
+    "offset": "0x1f3a4c",
+    "signature": "f657bda9f44f01a9fd7b02a9fd830091f30300aa085cc839c802f83768dec739"
+  },
+  "isMinimizedSession": {
+    "offset": "0x49f1e98",
+    "signature": "f44fbea9fd7b01a9fd430091f30300aab04cf99780000034683e41b908010412"
+  },
+  "makeUiSendInfo": {
+    "offset": "0x6d9284",
+    "signature": "f44fbea9fd7b01a9fd430091f30308aa008a80528cf59a95e003679e0004186e"
+  },
+  "voiceAudioPath": {
+    "offset": "0x32cb668",
+    "signature": "ff4303d1f6570aa9f44f0ba9fd7b0ca9fd030391f50302aaf40300aaf30308aa"
+  },
+  "voiceDataGetter": {
+    "offset": "0x2ecd06c",
+    "signature": "ff8302d1f65707a9f44f08a9fd7b09a9fd430291f30302aaf60301aaf40300aa"
+  },
+  "voiceTranscriptionStart": {
+    "offset": "0x3dd5d2c",
+    "signature": "09fc40f9200540f99b200214fc6fbda9f44f01a9fd7b02a9fd830091ff030fd1"
+  },
+  "ocrLocalRecognition": {
+    "offset": "0x33f8f94",
+    "signature": "ff0304d1fa670ba9f85f0ca9f6570da9f44f0ea9fd7b0fa9fdc30391f60302aa"
+  },
+  "makeVoiceSendInfo": {
+    "offset": "0x4140b70",
+    "signature": "fa67bba9f85f01a9f65702a9f44f03a9fd7b04a9fd030191f50304aaf60303aa"
+  },
+  "isPinnedSession": {
+    "offset": "0x49f1e8c",
+    "signature": "08f44439000d0353c0035fd6f44fbea9fd7b01a9fd430091f30300aab04cf997"
+  },
+  "messageFormatter": {
+    "offset": "0x494ead8",
+    "signature": "ffc301d1f44f05a9fd7b06a9fd830191f40300aaf30308aae8630091d6ffff97"
+  },
+  "accountFactory": {
+    "offset": "0x43199e8",
+    "signature": "ffc300d1f44f01a9fd7b02a9fd830091f30308aae8e202d0001541f9080040f9"
+  },
+  "messageService": {
+    "offset": "0x24718d0",
+    "signature": "ffc301d1f44f05a9fd7b06a9fd830191f40300aaf30308aac8a3039008410991"
+  },
+  "messageServiceResult": {
+    "offset": "0x1ffa3bc",
+    "signature": "f44fbea9fd7b01a9fd430091000040f974eb0a95200300b4f30300aa000040f9"
+  },
+  "messageTaskResult": {
+    "offset": "0x2f0f39c",
+    "signature": "f44fbea9fd7b01a9fd430091000040f97c97ce94200300b4f30300aa000040f9"
+  },
+  "taskContextGuard": {
+    "offset": "0x62c1434",
+    "signature": "f44fbea9fd7b01a9fd430091f30300aa00d601f000001e91080040f900013fd6"
+  },
+  "contactDisplayName": {
+    "offset": "0x283dd10",
+    "signature": "ff0307d1f65719a9f44f1aa9fd7b1ba9fdc30691f50302aaf40301aaf30308aa"
+  },
+  "makeNativeUuid": {
+    "offset": "0x34ea8",
+    "signature": "ff0302d1f44f06a9fd7b07a9fdc30191f30308aa08b304d0082946f9080140f9"
+  },
+  "sendInfoClone": {
+    "offset": "0x49a05b4",
+    "signature": "f657bda9f44f01a9fd7b02a9fd830091f50301aaf40308aa00bc8052bed88f94"
+  },
+  "sendInfoDestructor": {
+    "offset": "0x681ddc",
+    "signature": "f44fbea9fd7b01a9fd430091f30300aa889b049008010d9108410091080000f9"
+  },
+  "sendGroupMessages": {
+    "offset": "0x2e8cc58",
+    "signature": "e923b96dfc6f01a9fa6702a9f85f03a9f65704a9f44f05a9fd7b06a9fd830191"
+  },
+  "sendStageCtor": {
+    "offset": "0x2d580f4",
+    "signature": "f657bda9f44f01a9fd7b02a9fd830091f30300aa0108002900e4006f0080803c"
+  },
+  "sendContextConstructor": {
+    "offset": "0x2df8848",
+    "signature": "ff8301d1fa6701a9f85f02a9f65703a9f44f04a9fd7b05a9fd430191f90302aa"
+  },
+  "copySessions": {
+    "offset": "0x259f394",
+    "signature": "f657bda9f44f01a9fd7b02a9fd830091f40301aaf30300aa00e4006f000000ad"
+  },
+  "sendProcessor": {
+    "offset": "0x2ea35d0",
+    "signature": "f85fbca9f65701a9f44f02a9fd7b03a9fdc30091ff0309d1f40302aaf50301aa"
+  },
+  "voiceFrontRegistry": {
+    "offset": "0x421facc",
+    "signature": "ffc307d1fa671aa9f85f1ba9f6571ca9f44f1da9fd7b1ea9fd830791f30301aa"
+  },
+  "ocrService": {
+    "offset": "0x202ab18",
+    "signature": "ffc301d1f44f05a9fd7b06a9fd830191f40300aaf30308aa08c503f008611691"
+  },
+  "ocrInitialize": {
+    "offset": "0x33f61d8",
+    "signature": "ffc306d1f65718a9f44f19a9fd7b1aa9fd830691f30300aab4a302d108150390"
+  },
+  "contactService": {
+    "offset": "0x211abfc",
+    "signature": "ffc301d1f44f05a9fd7b06a9fd830191f40300aaf30308aaa8bd039008813f91"
+  },
+  "voiceTranscriptionAttach": {
+    "offset": "0x21e080",
+    "signature": "ff0303d1f85f08a9f65709a9f44f0aa9fd7b0ba9fdc30291f30304aaf40303aa"
+  }
+}

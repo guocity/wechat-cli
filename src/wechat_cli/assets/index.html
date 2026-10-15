@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WeChat local</title><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<body><header><div><strong>WeChat local</strong><span>Python gateway</span></div><button id="refresh">Refresh chats</button><button id="connection">Connection</button></header>
+<p id="status" role="status" aria-live="polite">Connecting to your local session…</p>
+<main><aside aria-label="Conversations"><label for="search">Conversations</label><input id="search" type="search" placeholder="Search by name or ID"><nav id="chats"></nav></aside>
+<section id="conversation"><div class="conversation-title"><h1 id="title">Select a conversation</h1><label>History <select id="limit"><option>20</option><option selected>50</option><option>100</option></select></label><button id="history" disabled>Refresh history</button></div>
+<div id="messages" aria-live="polite"></div><form id="compose"><label for="text">Message</label><textarea id="text" maxlength="4096" rows="3" disabled placeholder="Write a message…"></textarea><button id="send" disabled>Send text</button></form>
+<form id="upload"><label for="file">Send file or voice</label><input type="file" id="file"><select id="file-kind"><option value="file">File</option><option value="wav">Voice (mono PCM WAV)</option><option value="silk">Voice (SILK)</option></select><button id="send-file" disabled>Send upload</button></form></section></main>
+<footer>Sign into the configured WeChat app. File sending requires its target chat to be open and Accessibility permission.</footer></body></html>
