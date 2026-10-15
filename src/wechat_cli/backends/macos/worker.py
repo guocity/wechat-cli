@@ -17,11 +17,11 @@ from wechat_cli.backends.macos.setup import check_payload
 package = pathlib.Path(__file__).resolve().parent / "assets"
 app = pathlib.Path(os.environ["WECHAT_NATIVE_APP"]).resolve()
 data_dir = pathlib.Path(os.environ["WECHAT_DATA_DIR"])
-config = json.loads((app / "Contents/Frameworks/FridaGadget.config").read_text())
+config = json.loads((app / "Contents/Frameworks/FridaGadget.config").read_text(encoding="utf-8"))
 
 profile = check_payload(app)
-source = (package / "startup-notice.js").read_text() + "\n"
-source += (package / "gui-lifecycle.js").read_text() + "\n"
+source = (package / "startup-notice.js").read_text(encoding="utf-8") + "\n"
+source += (package / "gui-lifecycle.js").read_text(encoding="utf-8") + "\n"
 source += "globalThis.WECHAT_NATIVE_PROFILE=" + json.dumps(profile) + ";\n"
 support = os.environ["WECHAT_NATIVE_SUPPORT"]
 if (
@@ -31,7 +31,7 @@ if (
 ):
     raise RuntimeError("invalid_native_runtime")
 source += "globalThis.WECHAT_NATIVE_SUPPORT=" + json.dumps(str(app / "Contents/Frameworks" / support)) + ";\n"
-source += (package / "native-agent.js").read_text()
+source += (package / "native-agent.js").read_text(encoding="utf-8")
 endpoint = "127.0.0.1:" + str(config["interaction"]["port"])
 session = device = script = child = None
 output_lock = threading.Lock()

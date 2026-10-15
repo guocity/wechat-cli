@@ -1,5 +1,6 @@
 import io
 import json
+import os
 import struct
 from pathlib import Path
 
@@ -98,8 +99,9 @@ def test_download_atomic_checksum_and_size(tmp_path, monkeypatch):
 def test_configuration_is_private_and_token_stable(tmp_path):
     first = api_token(tmp_path)
     assert api_token(tmp_path) == first and len(first) == 64
-    assert (tmp_path / "api-token").stat().st_mode & 0o777 == 0o600
-    assert tmp_path.stat().st_mode & 0o777 == 0o700
+    if os.name != "nt":
+        assert (tmp_path / "api-token").stat().st_mode & 0o777 == 0o600
+        assert tmp_path.stat().st_mode & 0o777 == 0o700
     app = tmp_path / "WeChat.app"
     library = app / "Contents/Frameworks/native-reader-test.dylib"
     library.parent.mkdir(parents=True)
@@ -142,6 +144,7 @@ def test_inject_never_overwrites_zero_filled_section_data(tmp_path):
     assert path.read_bytes() == original
 
 
+@pytest.mark.skipif(os.name == "nt", reason="macOS copy preserves POSIX directory permissions")
 def test_prepare_preserves_existing_destination_parent_permissions(tmp_path, monkeypatch):
     parent = tmp_path / "Applications"
     parent.mkdir(mode=0o755)

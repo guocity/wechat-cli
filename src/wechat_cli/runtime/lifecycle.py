@@ -19,7 +19,7 @@ def configured_port(directory, explicit=None):
     if explicit is not None:
         return explicit
     try:
-        value = json.loads((directory / "server.json").read_text())
+        value = json.loads((directory / "server.json").read_text(encoding="utf-8"))
         return int(value["port"])
     except (OSError, ValueError, KeyError):
         return 8787
@@ -72,7 +72,7 @@ def ensure_server(directory, port, timeout=75):
         while time.monotonic() < deadline:
             if child.poll() is not None:
                 try:
-                    error = json.loads(log.read_text().splitlines()[-1])
+                    error = json.loads(log.read_text(encoding="utf-8").splitlines()[-1])
                     raise AppError(error["error"], error["message"], 424)
                 except (ValueError, KeyError, IndexError):
                     raise AppError(

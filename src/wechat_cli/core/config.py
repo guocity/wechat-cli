@@ -31,7 +31,7 @@ def private_write(path, value):
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     fd, name = tempfile.mkstemp(dir=path.parent, prefix=".write-")
     try:
-        with os.fdopen(fd, "w") as output:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as output:
             output.write(value)
         os.replace(name, path)
     finally:
@@ -51,9 +51,9 @@ def api_token(directory):
     except FileExistsError:
         pass
     else:
-        with os.fdopen(fd, "w") as output:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as output:
             output.write(secrets.token_hex(32) + "\n")
-    token = path.read_text().strip()
+    token = path.read_text(encoding="utf-8").strip()
     if not 16 <= len(token) <= 512 or any(c.isspace() for c in token):
         raise AppError("invalid_api_token", f"Invalid API token in {path}", 424)
     path.chmod(0o600)

@@ -23,7 +23,7 @@ def ensure_current(directory):
     with lock_file(directory / "upgrade.lock"):
         runtime = installer.load_runtime(directory)
         current = installer.check_payload(Path(runtime["app"]))
-        latest = json.loads(LATEST_PROFILE.read_text())
+        latest = json.loads(LATEST_PROFILE.read_text(encoding="utf-8"))
         if release_order(current) >= release_order(latest):
             return runtime
         executable = Path(runtime["app"]) / "Contents/MacOS/WeChat"

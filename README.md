@@ -160,6 +160,8 @@ src/wechat_cli/
 
 `compatibility/macos.json` pairs the latest validated native profile with its installer URL. Startup upgrades use this shipped manifest and verify the exact payload fingerprint; they do not guess compatibility with an untested vendor update. Background-start commands finish downloads/builds in the foreground before starting the native-startup timeout, and foreground `serve` performs the same check through the backend.
 
+Live Windows evaluation passed the shared Python/API test suite and confirmed Frida attachment to an extracted WeChat 4.1.15.53 copy. See [Windows validation](docs/windows-validation.md) for results, Python 3.11 requirements and remaining native backend work.
+
 Only Apple Silicon macOS is currently validated. Windows host primitives are separated, but a native Windows backend remains unimplemented; Windows and Linux return an explicit unsupported-platform error. Add a validated backend and compatibility profiles behind the same contract to extend support. Do not copy macOS ABI assumptions into another backend.
 
 ## Development and release

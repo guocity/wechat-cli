@@ -47,6 +47,7 @@ class WorkerTransport:
                     stdout=subprocess.PIPE,
                     stderr=subprocess.DEVNULL,
                     text=True,
+                    encoding="utf-8",
                     bufsize=1,
                 )
             except OSError:

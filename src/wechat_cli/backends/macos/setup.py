@@ -20,7 +20,7 @@ from wechat_cli.core.config import PACKAGE, private_directory, save_json
 from wechat_cli.core.errors import AppError
 from wechat_cli.core.network import ssl_context
 
-RELEASE = json.loads((PACKAGE / "compatibility/macos.json").read_text())
+RELEASE = json.loads((PACKAGE / "compatibility/macos.json").read_text(encoding="utf-8"))
 WECHAT_URL = RELEASE["installerUrl"]
 GADGET_URL = (
     "https://github.com/frida/frida/releases/download/17.8.0/frida-gadget-17.8.0-macos-universal.dylib.xz"
@@ -65,7 +65,7 @@ def check_payload(app):
     except OSError:
         raise AppError("invalid_wechat_app", "Missing Contents/Resources/wechat.dylib", 424) from None
     for path in sorted(PROFILES.glob("*.json")):
-        profile = json.loads(path.read_text())
+        profile = json.loads(path.read_text(encoding="utf-8"))
         if actual == profile["payloadSha256"]:
             return profile
     raise AppError(
@@ -84,7 +84,9 @@ def check_app(app):
         )
     check_payload(app)
     try:
-        config = json.loads((app / "Contents/Frameworks/FridaGadget.config").read_text())["interaction"]
+        config = json.loads((app / "Contents/Frameworks/FridaGadget.config").read_text(encoding="utf-8"))[
+            "interaction"
+        ]
         if (
             config["type"] != "listen"
             or config.get("address", "127.0.0.1") != "127.0.0.1"
@@ -367,7 +369,7 @@ def doctor(directory):
 
 def load_runtime(directory):
     try:
-        value = json.loads((directory / "native-runtime.json").read_text())
+        value = json.loads((directory / "native-runtime.json").read_text(encoding="utf-8"))
         app = Path(value["app"])
         library = value["supportLibrary"]
         if not app.is_absolute() or not isinstance(library, str):

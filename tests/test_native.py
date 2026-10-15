@@ -43,6 +43,22 @@ def test_actual_worker_transport_and_cleanup(tmp_path):
         native.connect()
 
 
+def test_worker_protocol_uses_utf8(tmp_path):
+    worker = """import json,sys
+sys.stdin.reconfigure(encoding='utf-8')
+sys.stdout.reconfigure(encoding='utf-8')
+print(json.dumps({'event':'ready','protocol':1,'pid':123}),flush=True)
+for line in sys.stdin:
+ r=json.loads(line)
+ print(json.dumps({'id':r['id'],'result':r['params']},ensure_ascii=False),flush=True)
+"""
+    native = bridge(tmp_path, worker)
+    try:
+        assert native.request("echo", {"text": "微信 📨"}) == {"text": "微信 📨"}
+    finally:
+        native.close()
+
+
 def test_native_timeout_and_disconnection(tmp_path):
     native = bridge(tmp_path)
     with pytest.raises(AppError) as caught:
