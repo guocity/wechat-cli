@@ -1,6 +1,5 @@
 """Map an ambiguous callee through a uniquely matched surrounding call site."""
 
-import json
 import re
 import struct
 import sys

@@ -11,9 +11,10 @@ import time
 from pathlib import Path
 
 import frida
+
 from wechat_cli.config import ASSETS
 
-FIXTURE = r'''
+FIXTURE = r"""
 #import <AppKit/AppKit.h>
 #include <cstdio>
 int main(int argc,char **argv){
@@ -40,52 +41,75 @@ int main(int argc,char **argv){
  }
  return 0;
 }
-'''
+"""
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--gadget', required=True, type=Path)
+    parser.add_argument("--gadget", required=True, type=Path)
     args = parser.parse_args()
     results = {}
-    with tempfile.TemporaryDirectory(prefix='wechat-notice-test-') as directory:
+    with tempfile.TemporaryDirectory(prefix="wechat-notice-test-") as directory:
         root = Path(directory)
-        shutil.copyfile(args.gadget, root / 'FridaGadget.dylib')
-        source, binary = root / 'fixture.mm', root / 'fixture'
+        shutil.copyfile(args.gadget, root / "FridaGadget.dylib")
+        source, binary = root / "fixture.mm", root / "fixture"
         source.write_text(FIXTURE)
-        subprocess.run(['/usr/bin/clang++', '-fobjc-arc', '-framework', 'AppKit', str(source), '-o', str(binary)], check=True)
-        for mode in ['modal', 'sheet', 'unrelated']:
+        subprocess.run(
+            ["/usr/bin/clang++", "-fobjc-arc", "-framework", "AppKit", str(source), "-o", str(binary)],
+            check=True,
+        )
+        for mode in ["modal", "sheet", "unrelated"]:
             with socket.socket() as sock:
-                sock.bind(('127.0.0.1', 0))
+                sock.bind(("127.0.0.1", 0))
                 port = sock.getsockname()[1]
-            token = 'startup-notice-fixture-token-1234'
-            (root / 'FridaGadget.config').write_text(json.dumps({'interaction': {'type':'listen','address':'127.0.0.1','port':port,'token':token,'on_load':'wait'}}))
-            process = subprocess.Popen([str(binary), mode], env={**os.environ, 'DYLD_INSERT_LIBRARIES': str(root / 'FridaGadget.dylib')}, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            token = "startup-notice-fixture-token-1234"
+            (root / "FridaGadget.config").write_text(
+                json.dumps(
+                    {
+                        "interaction": {
+                            "type": "listen",
+                            "address": "127.0.0.1",
+                            "port": port,
+                            "token": token,
+                            "on_load": "wait",
+                        }
+                    }
+                )
+            )
+            process = subprocess.Popen(
+                [str(binary), mode],
+                env={**os.environ, "DYLD_INSERT_LIBRARIES": str(root / "FridaGadget.dylib")},
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
             manager = frida.get_device_manager()
-            endpoint = f'127.0.0.1:{port}'
+            endpoint = f"127.0.0.1:{port}"
             device = manager.add_remote_device(endpoint, token=token)
             session = None
             try:
                 deadline = time.monotonic() + 15
                 while True:
                     try:
-                        session = device.attach('Gadget')
+                        session = device.attach("Gadget")
                         break
                     except frida.ServerNotRunningError:
                         if time.monotonic() >= deadline:
                             raise
                         time.sleep(0.1)
-                script = session.create_script((ASSETS / 'startup-notice.js').read_text())
+                script = session.create_script((ASSETS / "startup-notice.js").read_text())
                 script.load()
                 device.resume(process.pid)
                 output, error = process.communicate(timeout=15)
                 if process.returncode:
-                    raise RuntimeError(f'Fixture failed: {error[:1000]}')
-                value = json.loads(next(line for line in reversed(output.splitlines()) if line.startswith("{")))
-                if mode == 'unrelated':
-                    assert value['response'] != 1000 and value['remembered'] == 0, value
+                    raise RuntimeError(f"Fixture failed: {error[:1000]}")
+                value = json.loads(
+                    next(line for line in reversed(output.splitlines()) if line.startswith("{"))
+                )
+                if mode == "unrelated":
+                    assert value["response"] != 1000 and value["remembered"] == 0, value
                 else:
-                    assert value == {'response':1000,'remembered':1}, value
+                    assert value == {"response": 1000, "remembered": 1}, value
                 results[mode] = value
             finally:
                 if process.poll() is None:
@@ -100,5 +124,5 @@ def main():
     print(json.dumps(results, indent=2))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

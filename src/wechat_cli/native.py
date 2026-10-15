@@ -88,7 +88,10 @@ class NativeBridge:
                         method, future = entry
                         if "error" in value:
                             code = value["error"]
-                            if method in SEND_METHODS and code in {"native_read_failed", "native_send_failed"}:
+                            if method in SEND_METHODS and code in {
+                                "native_read_failed",
+                                "native_send_failed",
+                            }:
                                 code = "native_send_outcome_unknown"
                             messages = {
                                 "native_account_not_ready": "Sign into the configured WeChat app, then retry.",
@@ -96,7 +99,9 @@ class NativeBridge:
                                 "native_send_outcome_unknown": "Send outcome is unknown. Inspect WeChat history and reuse the same key for retries.",
                                 "native_feature_unavailable": "This feature has not been validated for this WeChat payload.",
                             }
-                            future.set_exception(AppError(code, messages.get(code, code.replace("_", " ")), 409))
+                            future.set_exception(
+                                AppError(code, messages.get(code, code.replace("_", " ")), 409)
+                            )
                         else:
                             future.set_result(value.get("result"))
         except (OSError, ValueError):
