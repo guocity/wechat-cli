@@ -75,8 +75,10 @@ class WorkerTransport:
                     if not ready.done():
                         ready.set_result(True)
                 elif value.get("event") == "stopped":
-                    self.stop_reason = value.get("reason", "bridge_disconnected")
-                    self.stopped.set()
+                    with self.lock:
+                        self.stop_reason = value.get("reason", "bridge_disconnected")
+                        self.stopped.set()
+                        self._fail_pending()
                 elif value.get("event") == "failure":
                     if not ready.done():
                         code = value.get("error", "native_bridge_unavailable")
@@ -127,24 +129,25 @@ class WorkerTransport:
                     self.observed["connected"] = False
                     self.stop_reason = self.stop_reason or "bridge_disconnected"
                     self.stopped.set()
-                    for method, future in self.pending.values():
-                        code = (
-                            "native_send_outcome_unknown"
-                            if method in SEND_METHODS
-                            else "native_bridge_unavailable"
-                        )
-                        future.set_exception(
-                            AppError(
-                                code, "Worker disconnected. Check WeChat history before retrying a send.", 502
-                            )
-                        )
-                    self.pending.clear()
+                    self._fail_pending()
             process.stdout.close()
+
+    def _fail_pending(self):
+        # Called under self.lock: GUI closure can precede worker EOF indefinitely.
+        self.observed["connected"] = False
+        for method, future in self.pending.values():
+            code = "native_send_outcome_unknown" if method in SEND_METHODS else "native_bridge_unavailable"
+            future.set_exception(
+                AppError(code, "Bridge closed. Check WeChat history before retrying a send.", 502)
+            )
+        self.pending.clear()
 
     def request(self, method, params=None):
         self.connect()
         future = Future()
         with self.lock:
+            if self.closed or self.stopped.is_set():
+                raise AppError("native_bridge_unavailable", "Native bridge is closed", 503)
             if len(self.pending) >= 8:
                 raise AppError("native_bridge_busy", "Too many pending native requests", 429)
             self.sequence += 1

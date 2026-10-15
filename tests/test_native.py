@@ -1,6 +1,7 @@
 import json
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
@@ -91,7 +92,9 @@ def test_gui_event_prevents_requests_and_never_restarts_worker(tmp_path):
         "if r['method']=='closeGui': print(json.dumps({'event':'stopped','reason':'gui_closed'}),flush=True); print(json.dumps({'id':r['id'],'result':{}}),flush=True)",
     )
     native = bridge(tmp_path, worker)
-    native.request("closeGui")
+    with pytest.raises(AppError) as caught:
+        native.request("closeGui")
+    assert caught.value.code == "native_bridge_unavailable"
     assert native.stopped.wait(timeout=1)
     child = native.process
     with pytest.raises(AppError):
@@ -99,6 +102,32 @@ def test_gui_event_prevents_requests_and_never_restarts_worker(tmp_path):
     assert native.process is child
     assert native.stop_reason == "gui_closed"
     native.close()
+
+
+@pytest.mark.parametrize(
+    "method,code", [("status", "native_bridge_unavailable"), ("sendText", "native_send_outcome_unknown")]
+)
+def test_gui_close_fails_pending_calls_without_waiting_for_worker_exit(tmp_path, method, code):
+    worker = """import json,sys,time
+print(json.dumps({'event':'ready','protocol':1,'pid':123}),flush=True)
+sys.stdin.readline()
+print(json.dumps({'event':'stopped','reason':'gui_closed'}),flush=True)
+time.sleep(30)
+"""
+    native = bridge(tmp_path, worker)
+    native.timeout = 10
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        result = pool.submit(native.request, method)
+        try:
+            with pytest.raises(AppError) as caught:
+                result.result(timeout=2)
+            assert caught.value.code == code
+            assert not native.pending
+            assert native.process.poll() is None
+        finally:
+            if native.process:
+                native.process.kill()
+            native.close()
 
 
 def test_worker_death_cannot_relaunch_gui(tmp_path):

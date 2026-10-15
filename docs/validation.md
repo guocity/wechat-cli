@@ -21,6 +21,10 @@ The full suite now contains **99 passing tests**. A live isolated startup began 
 
 The live registration was then reset to 4.1.13 while retaining the prepared 4.1.15 managed copy. Startup reused that copy, again launched 4.1.15, and left the cached installer's modification timestamp unchanged.
 
+## Pull request review regressions
+
+The final macOS run passed **127 tests**, with one Windows-only ACL test skipped. Regression tests first reproduced, then verified fixes for same-second Windows history ordering across database shards and pending native reads/sends remaining blocked after a GUI-close event. History merges now retain the native sort sequence; GUI closure fails pending calls immediately and preserves unknown-outcome semantics for sends, even if the worker stays alive. Ruff, JavaScript syntax checks, wheel/sdist builds, Twine metadata checks, and wheel asset checks passed. These final fixes have not been rerun against a live Windows app. GitHub CI diagnostics were unavailable because the review connector requires a connected GitHub account.
+
 ## Reproduce
 
 ```sh

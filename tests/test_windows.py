@@ -89,6 +89,7 @@ def test_windows_queries_are_bound_and_preserve_large_ids(tmp_path):
                 "server_id": "18446744073709551614",
                 "local_type": "1",
                 "create_time": "5",
+                "sort_seq": "10",
                 "sender": "self",
                 "content": {"hex": b"hello".hex()},
             }
@@ -104,6 +105,41 @@ def test_windows_queries_are_bound_and_preserve_large_ids(tmp_path):
         backend.messages("'; DROP TABLE x;--", 1)
     assert error.value.code == "native_chat_not_found"
     assert all("DROP TABLE" not in p["sql"] for method, p in requests if method == "query")
+
+
+def test_windows_history_merges_shards_in_native_order(tmp_path, monkeypatch):
+    backend = WindowsBackend(tmp_path)
+    monkeypatch.setattr(backend, "chats", lambda: {"items": [{"id": "filehelper"}]})
+    monkeypatch.setattr(backend, "self_id", lambda: "self")
+    monkeypatch.setattr(backend, "_request", lambda method: ["message_0.db", "message_1.db"])
+
+    def query(database, sql, parameters=None, maximum=20000):
+        if database == "contact.db":
+            return []
+        if "sqlite_master" in sql:
+            return [{"name": parameters[1]}]
+        # Imported/backfilled rows can have larger local IDs than newer messages.
+        ids_and_sequences = (
+            [("900", "10"), ("800", "9")] if database == "message_0.db" else [("2", "12"), ("1", "11")]
+        )
+        return [
+            {
+                "local_id": identifier,
+                "sort_seq": sequence,
+                "server_id": "0",
+                "local_type": "1",
+                "create_time": "5",
+                "sender": "self",
+                "content": {"hex": b"hello".hex()},
+            }
+            for identifier, sequence in ids_and_sequences
+        ]
+
+    monkeypatch.setattr(backend, "_query", query)
+    result = backend.messages("filehelper", 2)
+    assert [item["id"] for item in result["items"]] == ["2", "1"]
+    assert result["total"] == 2
+    assert all("sort_seq" not in item for item in result["items"])
 
 
 def test_windows_unvalidated_media_reports_unavailable(tmp_path):

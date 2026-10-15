@@ -159,7 +159,7 @@ class WindowsBackend:
                 continue
             rows = self._query(
                 database,
-                f'SELECT m.local_id,m.server_id,m.local_type,m.create_time,m.sort_seq,n.user_name AS sender,CAST(m.message_content AS BLOB) AS content FROM "{table}" m LEFT JOIN Name2Id n ON n.rowid=m.real_sender_id ORDER BY m.create_time DESC,m.sort_seq DESC LIMIT ?',
+                f'SELECT m.local_id,m.server_id,m.local_type,m.create_time,m.sort_seq,n.user_name AS sender,CAST(m.message_content AS BLOB) AS content FROM "{table}" m LEFT JOIN Name2Id n ON n.rowid=m.real_sender_id ORDER BY m.create_time DESC,m.sort_seq DESC,m.local_id DESC LIMIT ?',
                 [limit],
                 limit,
             )
@@ -168,25 +168,29 @@ class WindowsBackend:
                 contact = contacts.get(sender, {})
                 kind = int(row["local_type"])
                 items.append(
-                    resolve_message(
-                        {
-                            "id": str(row["local_id"]),
-                            "serverId": str(row["server_id"]),
-                            "chatId": chat_id,
-                            "type": kind & 0xFFFFFFFF,
-                            "subType": kind >> 32,
-                            "timestamp": int(row["create_time"]),
-                            "content": content(row["content"]),
-                            "senderId": sender,
-                            "senderName": contact.get("remark") or contact.get("nick_name") or sender,
-                            "isOutgoing": sender == account,
-                        }
+                    (
+                        (int(row["create_time"]), int(row["sort_seq"]), int(row["local_id"])),
+                        resolve_message(
+                            {
+                                "id": str(row["local_id"]),
+                                "serverId": str(row["server_id"]),
+                                "chatId": chat_id,
+                                "type": kind & 0xFFFFFFFF,
+                                "subType": kind >> 32,
+                                "timestamp": int(row["create_time"]),
+                                "content": content(row["content"]),
+                                "senderId": sender,
+                                "senderName": contact.get("remark") or contact.get("nick_name") or sender,
+                                "isOutgoing": sender == account,
+                            }
+                        ),
                     )
                 )
-        items.sort(key=lambda m: (m.get("timestamp", 0), int(m["id"])), reverse=True)
+        # Local IDs are shard-local; retain WeChat's sort sequence when merging.
+        items.sort(key=lambda item: item[0], reverse=True)
         return {
             "source": "native",
-            "items": items[:limit],
+            "items": [message for _, message in items[:limit]],
             "total": min(limit, len(items)),
             "order": "newest_first",
         }
