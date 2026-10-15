@@ -20,7 +20,8 @@ from wechat_cli.core.config import PACKAGE, private_directory, save_json
 from wechat_cli.core.errors import AppError
 from wechat_cli.core.network import ssl_context
 
-WECHAT_URL = "https://dldir1v6.qq.com/weixin/Universal/Mac/WeChatMac_4.1.15.dmg"
+RELEASE = json.loads((PACKAGE / "compatibility/macos.json").read_text())
+WECHAT_URL = RELEASE["installerUrl"]
 GADGET_URL = (
     "https://github.com/frida/frida/releases/download/17.8.0/frida-gadget-17.8.0-macos-universal.dylib.xz"
 )
@@ -236,19 +237,32 @@ def build_helper(app):
     return library
 
 
-def register(app, directory):
+def prepared_configuration(app, library, profile, directory, publish):
+    runtime = {"app": str(app), "supportLibrary": library}
+    if publish:
+        save_json(directory / "native-runtime.json", runtime)
+    return {"configured": True, **runtime, "version": profile["version"], "build": profile["build"]}
+
+
+def expected_profile(app, expected_payload=None):
+    profile = check_payload(app)
+    if expected_payload is not None and profile["payloadSha256"] != expected_payload:
+        raise AppError(
+            "unexpected_wechat_payload",
+            "The installer does not contain the expected validated WeChat release. Update wechat-cli and retry; the previous bridge configuration was preserved.",
+            424,
+        )
+    return profile
+
+
+def register(app, directory, *, publish=True, expected_payload=None):
     app = check_app(app)
+    profile = expected_profile(app, expected_payload)
     library = build_helper(app)
-    save_json(directory / "native-runtime.json", {"app": str(app), "supportLibrary": library})
-    return {
-        "configured": True,
-        "app": str(app),
-        "version": check_payload(app)["version"],
-        "build": check_payload(app)["build"],
-    }
+    return prepared_configuration(app, library, profile, directory, publish)
 
 
-def prepare(source, destination, gadget, directory):
+def prepare(source, destination, gadget, directory, *, publish=True, expected_payload=None):
     source, destination = Path(source).resolve(), Path(destination).resolve()
     if destination == Path("/Applications/WeChat.app").resolve() or destination == source:
         raise AppError("stock_app_protected", "Destination must be a separate app copy")
@@ -256,7 +270,7 @@ def prepare(source, destination, gadget, directory):
         raise AppError("invalid_destination", "Destination cannot be inside the source app")
     if destination.exists():
         raise AppError("destination_exists", "Destination already exists; use setup --app to register it")
-    check_payload(source)  # Reject before copying hundreds of megabytes.
+    profile = expected_profile(source, expected_payload)  # Reject before copying hundreds of megabytes.
     destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     with tempfile.TemporaryDirectory(prefix="prepare-", dir=destination.parent) as staging:
         app = Path(staging) / "WeChatBridge.app"
@@ -283,23 +297,27 @@ def prepare(source, destination, gadget, directory):
         library = build_helper(app)
         # Ensure no partially prepared app is exposed as the configured runtime.
         os.rename(app, destination)
-    save_json(directory / "native-runtime.json", {"app": str(destination), "supportLibrary": library})
-    return {
-        "configured": True,
-        "app": str(destination),
-        "version": check_payload(destination)["version"],
-        "build": check_payload(destination)["build"],
-    }
+    return prepared_configuration(destination, library, profile, directory, publish)
 
 
-def setup(directory, *, app=None, source=None, destination=None, gadget=None, wechat_url=WECHAT_URL):
+def setup(
+    directory,
+    *,
+    app=None,
+    source=None,
+    destination=None,
+    gadget=None,
+    wechat_url=WECHAT_URL,
+    publish=True,
+    expected_payload=None,
+):
     require_macos()
     private_directory(directory)
     if app:
-        return register(app, directory)
+        return register(app, directory, publish=publish, expected_payload=expected_payload)
     destination = Path(destination or directory / "apps/WeChatBridge.app").expanduser().resolve()
     if not source and destination.exists():
-        return register(destination, directory)
+        return register(destination, directory, publish=publish, expected_payload=expected_payload)
     downloads = private_directory(directory / "downloads")
     if gadget:
         gadget_path = Path(gadget).expanduser().resolve()
@@ -310,7 +328,9 @@ def setup(directory, *, app=None, source=None, destination=None, gadget=None, we
             # The compressed archive is pinned to a verified hash.
             shutil.copyfileobj(input_file, output)
     if source:
-        return prepare(source, destination, gadget_path, directory)
+        return prepare(
+            source, destination, gadget_path, directory, publish=publish, expected_payload=expected_payload
+        )
     dmg = download(wechat_url, downloads / "WeChat.dmg", 1024**3)
     with mounted_app(dmg, downloads) as stock:
         # Verify Tencent's signature before trusting any downloaded executable.
@@ -324,7 +344,9 @@ def setup(directory, *, app=None, source=None, destination=None, gadget=None, we
                 "Downloaded app is not signed by the expected WeChat developer",
                 424,
             )
-        return prepare(stock, destination, gadget_path, directory)
+        return prepare(
+            stock, destination, gadget_path, directory, publish=publish, expected_payload=expected_payload
+        )
 
 
 def doctor(directory):

@@ -6,6 +6,7 @@ import zipfile
 from pathlib import Path
 
 REQUIRED = {
+    "wechat_cli/compatibility/macos.json",
     "wechat_cli/cli.py",
     "wechat_cli/backends/macos/assets/gui-lifecycle.js",
     "wechat_cli/core/contracts.py",

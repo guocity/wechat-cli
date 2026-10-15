@@ -27,6 +27,10 @@ On CLI startup, the bridge automatically accepts WeChat's exact **“opened from
 
 Quit other WeChat copies before starting the prepared app. Sign in through its normal WeChat window if needed. `start` launches that app and a persistent FastAPI/Uvicorn service. Later commands call the service and reuse its session; they do not log in again. `web` also starts the service if needed, then opens its local page. `stop` stops the Python service and leaves WeChat running and signed in.
 
+Before a new server starts, it checks the registered bridge against the package's latest validated release, currently **4.1.15 / build 270135**. A registered 4.1.13 copy is automatically upgraded: startup reuses a verified managed 4.1.15 copy if available, otherwise downloads and prepares a separate versioned copy, then atomically switches the runtime configuration before launching it. Upgrade progress is printed to stderr. The older copy and `/Applications/WeChat.app` are preserved; the previous runtime pointer is saved as `previous-native-runtime.json`.
+
+If WeChat is already running when an upgrade is needed, quit it and run `start` again. Startup enforces the single-instance rule and does not force-quit an app or replace a running bundle. A failed download, unexpected payload or preparation failure leaves the old runtime configuration intact and reports an error instead of silently starting the older version. Already-current copies require no update download. An existing running API session is reused; the check runs on the next new server startup, including `serve` and `web`.
+
 ## Supported payloads
 
 | WeChat version | Build | Installer |
@@ -37,7 +41,7 @@ Quit other WeChat copies before starting the prepared app. Sign in through its n
 
 Profiles are selected by the entire vendor payload's SHA-256, with native function signatures checked before use. Installer filenames alone do not establish compatibility. Tencent can replace a download without changing its filename. Future payloads require a new validated profile and package release; unknown payloads are rejected before patching. To get the newest package, use `uvx --refresh wechat-cli setup`.
 
-To prepare the current 4.1.13 download:
+To prepare the current 4.1.13 download for compatibility work (normal server startup subsequently selects the latest validated release):
 
 ```sh
 uvx wechat-cli setup \
@@ -153,6 +157,8 @@ src/wechat_cli/
 ```
 
 `core/contracts.py` defines the operations a backend provides. HTTP handlers and media workflows call this contract rather than native RPC method strings or platform controls. The app lifespan owns the backend, idempotency ledger, global instance lock and liveness monitor. Native calls stay in a subprocess with a versioned startup handshake and bounded requests; a disconnected worker cannot relaunch WeChat during an active session.
+
+`compatibility/macos.json` pairs the latest validated native profile with its installer URL. Startup upgrades use this shipped manifest and verify the exact payload fingerprint; they do not guess compatibility with an untested vendor update. Background-start commands finish downloads/builds in the foreground before starting the native-startup timeout, and foreground `serve` performs the same check through the backend.
 
 Only Apple Silicon macOS is currently validated. Windows host primitives are separated, but a native Windows backend remains unimplemented; Windows and Linux return an explicit unsupported-platform error. Add a validated backend and compatibility profiles behind the same contract to extend support. Do not copy macOS ABI assumptions into another backend.
 

@@ -10,8 +10,8 @@ from wechat_cli.runtime.transport import WorkerTransport
 from .controls import Controls
 from .processes import check_instance
 from .setup import doctor as doctor
-from .setup import load_runtime
 from .setup import setup as setup
+from .upgrade import ensure_current as ensure_current
 
 
 class MacOSBackend:
@@ -25,7 +25,7 @@ class MacOSBackend:
         self.executable = None
 
     def connect(self):
-        runtime = load_runtime(self.directory)
+        runtime = ensure_current(self.directory)
         self.executable = Path(runtime["app"]) / "Contents/MacOS/WeChat"
         check_instance(self.executable)
         self.transport = WorkerTransport(

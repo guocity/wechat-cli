@@ -12,7 +12,7 @@ import uvicorn
 from wechat_cli.client import ApiClient
 from wechat_cli.core.config import save_json
 from wechat_cli.core.errors import AppError
-from wechat_cli.host import detached_options, lock_file
+from wechat_cli.host import default_data_directory, detached_options, lock_file
 
 
 def configured_port(directory, explicit=None):
@@ -45,7 +45,10 @@ def ensure_server(directory, port, timeout=75):
         # Validate before spawning so configuration errors are immediately actionable.
         from wechat_cli.backends.registry import platform_backend
 
-        platform_backend().load_runtime(directory)
+        # Downloads/builds run here so their progress reaches the command line and
+        # does not consume the background server's native-startup timeout.
+        with lock_file(default_data_directory() / "instance.lock", blocking=False, instance=True):
+            platform_backend().ensure_current(directory)
         log = directory / "server.log"
         fd = os.open(log, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w") as output:

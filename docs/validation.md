@@ -13,6 +13,14 @@ Performed on Apple Silicon macOS, October 15, 2026. Python 3.11 development envi
 
 The original app bundle was not modified. The live checks used a separately copied app with the current helper. Real text/file/voice sends and cloud voice recognition were not invoked. Windows/Linux native backends remain unsupported; shared structure and host primitives do not imply validated native support.
 
+## Startup upgrade regression coverage
+
+The suite additionally checks automatic selection from 4.1.13 to the latest validated 4.1.15 release, reuse of both versioned and legacy managed caches, current/newer releases avoiding download or downgrade, exact-payload validation before copying, unpublished staging, preserved configuration after preparation or atomic-activation failures, running-app conflicts before and after a download, symlink rejection, the backend launching the newly selected app, and foreground preparation before the background startup timeout. The release manifest is included in the wheel asset checks.
+
+The full suite now contains **99 passing tests**. A live isolated startup began with a saved 4.1.13.34 / build 269602 reference, downloaded and verified the official 4.1.15 installer, prepared a separate versioned app, and reached `native_ready` on **4.1.15 / build 270135**. The previous runtime pointer and original 4.1.13 app remained intact. No messages were sent and the separately installed app was not modified.
+
+The live registration was then reset to 4.1.13 while retaining the prepared 4.1.15 managed copy. Startup reused that copy, again launched 4.1.15, and left the cached installer's modification timestamp unchanged.
+
 ## Reproduce
 
 ```sh
