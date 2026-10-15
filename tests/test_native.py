@@ -4,12 +4,13 @@ import sys
 
 import pytest
 
-from wechat_cli.config import save_json
-from wechat_cli.errors import AppError
-from wechat_cli.native import NativeBridge, receipt
+from wechat_cli.core.config import save_json
+from wechat_cli.core.errors import AppError
+from wechat_cli.core.models import receipt
+from wechat_cli.runtime.transport import WorkerTransport
 
 WORKER = """import json,sys,time
-print(json.dumps({'event':'ready'}),flush=True)
+print(json.dumps({'event':'ready','protocol':1,'pid':123}),flush=True)
 for line in sys.stdin:
  r=json.loads(line)
  if r['method']=='hang': time.sleep(5)
@@ -28,13 +29,13 @@ def bridge(tmp_path, worker=WORKER):
     def spawn(args, **kwargs):
         return subprocess.Popen([sys.executable, "-u", "-c", worker], **kwargs)
 
-    return NativeBridge(tmp_path, timeout=0.2, popen=spawn)
+    return WorkerTransport([sys.executable], dict(__import__("os").environ), timeout=0.2, popen=spawn)
 
 
 def test_actual_worker_transport_and_cleanup(tmp_path):
     native = bridge(tmp_path)
-    assert native.status()["connected"] is True
-    assert native.status()["connected"] is True
+    assert native.request("status")["connected"] is True
+    assert native.request("status")["connected"] is True
     child = native.process
     native.close()
     assert child.poll() == 0
@@ -68,6 +69,32 @@ def test_startup_failure_is_actionable(tmp_path):
     native.close()
 
 
+def test_gui_event_prevents_requests_and_never_restarts_worker(tmp_path):
+    worker = WORKER.replace(
+        "if r['method']=='hang': time.sleep(5)",
+        "if r['method']=='closeGui': print(json.dumps({'event':'stopped','reason':'gui_closed'}),flush=True); print(json.dumps({'id':r['id'],'result':{}}),flush=True)",
+    )
+    native = bridge(tmp_path, worker)
+    native.request("closeGui")
+    assert native.stopped.wait(timeout=1)
+    child = native.process
+    with pytest.raises(AppError):
+        native.request("status")
+    assert native.process is child
+    assert native.stop_reason == "gui_closed"
+    native.close()
+
+
+def test_worker_death_cannot_relaunch_gui(tmp_path):
+    native = bridge(tmp_path)
+    with pytest.raises(AppError):
+        native.request("die")
+    assert native.stopped.wait(timeout=1)
+    with pytest.raises(AppError):
+        native.request("status")
+    native.close()
+
+
 def test_receipt_does_not_claim_delivery():
     result = receipt({"source": "native", "queued": True, "receiverVerified": True, "requestId": "x"}, "chat")
     assert result["acceptedByClient"] is True and result["acknowledgedByServer"] is False
@@ -82,7 +109,7 @@ def test_worker_resumes_app_left_waiting_by_earlier_startup(tmp_path, monkeypatc
     import runpy
     import types
 
-    from wechat_cli import setup as setup_impl
+    from wechat_cli.backends.macos import setup as setup_impl
 
     app = tmp_path / "Waiting.app"
     (app / "Contents/Frameworks").mkdir(parents=True)
@@ -99,6 +126,9 @@ def test_worker_resumes_app_left_waiting_by_earlier_startup(tmp_path, monkeypatc
         "check_payload",
         lambda app: {"payloadSha256": hashlib.sha256(b"fixture payload").hexdigest()},
     )
+    from wechat_cli.backends.macos import processes
+
+    monkeypatch.setattr(processes, "check_instance", lambda *args: 123)
     calls = []
     exports = types.SimpleNamespace(
         startup_status=lambda: {
@@ -107,8 +137,12 @@ def test_worker_resumes_app_left_waiting_by_earlier_startup(tmp_path, monkeypatc
             "applicationRunning": False,
         }
     )
-    script = types.SimpleNamespace(load=lambda: None, unload=lambda: None, exports_sync=exports)
-    session = types.SimpleNamespace(create_script=lambda source: script, detach=lambda: None)
+    script = types.SimpleNamespace(
+        load=lambda: None, unload=lambda: None, exports_sync=exports, on=lambda *args: None
+    )
+    session = types.SimpleNamespace(
+        create_script=lambda source: script, detach=lambda: None, on=lambda *args: None
+    )
     device = types.SimpleNamespace(attach=lambda name: session, resume=lambda pid: calls.append(pid))
     manager = types.SimpleNamespace(
         add_remote_device=lambda *args, **kwargs: device, remove_remote_device=lambda endpoint: None
@@ -119,5 +153,5 @@ def test_worker_resumes_app_left_waiting_by_earlier_startup(tmp_path, monkeypatc
         types.SimpleNamespace(get_device_manager=lambda: manager, InvalidOperationError=RuntimeError),
     )
     monkeypatch.setattr(sys, "stdin", io.StringIO(""))
-    runpy.run_module("wechat_cli.worker", run_name="__main__")
+    runpy.run_module("wechat_cli.backends.macos.worker", run_name="__main__")
     assert calls == [123]

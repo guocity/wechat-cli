@@ -1,22 +1,23 @@
 """Bounded subprocess transport. A blocked native call cannot hang the HTTP server."""
 
 import json
-import os
 import subprocess
-import sys
 import threading
 from concurrent.futures import Future, TimeoutError
 
-from .config import load_runtime
-from .errors import AppError
-from .models import resolve_chat, resolve_message
+from wechat_cli.core.errors import AppError
 
 SEND_METHODS = {"sendText", "sendVoice"}
 
 
-class NativeBridge:
-    def __init__(self, directory, timeout=20, popen=subprocess.Popen):
-        self.directory, self.timeout, self.popen = directory, timeout, popen
+class WorkerTransport:
+    def __init__(self, command, environment, timeout=20, popen=subprocess.Popen):
+        self.command, self.environment = command, environment
+        self.timeout, self.popen = timeout, popen
+        self.stopped = threading.Event()
+        self.stop_reason = None
+        self.pid = None
+        self.started = False
         self.lock = threading.RLock()
         self.connect_lock = threading.Lock()
         self.pending = {}
@@ -28,22 +29,20 @@ class NativeBridge:
 
     def connect(self):
         with self.connect_lock:
-            if self.closed:
+            if self.closed or self.stopped.is_set():
                 raise AppError("native_bridge_unavailable", "Native bridge is closed", 503)
             if self.process and self.process.poll() is None:
                 return
-            runtime = load_runtime(self.directory)
-            environment = {
-                **os.environ,
-                "WECHAT_NATIVE_APP": runtime["app"],
-                "WECHAT_NATIVE_SUPPORT": runtime["supportLibrary"],
-                "WECHAT_DATA_DIR": str(self.directory),
-            }
+            if self.started:
+                raise AppError(
+                    "native_bridge_unavailable", "WeChat or its bridge closed; start the service again", 503
+                )
+            self.started = True
             self.ready = Future()
             try:
                 process = self.popen(
-                    [sys.executable, "-m", "wechat_cli.worker"],
-                    env=environment,
+                    self.command,
+                    env=self.environment,
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.DEVNULL,
@@ -69,15 +68,25 @@ class NativeBridge:
             for line in process.stdout:
                 value = json.loads(line)
                 if value.get("event") == "ready":
+                    if value.get("protocol") != 1:
+                        raise ValueError("unsupported_worker_protocol")
+                    self.pid = value.get("pid")
                     if not ready.done():
                         ready.set_result(True)
+                elif value.get("event") == "stopped":
+                    self.stop_reason = value.get("reason", "bridge_disconnected")
+                    self.stopped.set()
                 elif value.get("event") == "failure":
                     if not ready.done():
                         code = value.get("error", "native_bridge_unavailable")
                         ready.set_exception(
                             AppError(
                                 code,
-                                "Cannot connect to the patched WeChat app. Quit stock WeChat and run doctor.",
+                                (
+                                    "Only one WeChat instance is allowed. Quit the other WeChat app or stop its wechat-cli server, then retry."
+                                    if code == "wechat_instance_conflict"
+                                    else "Cannot connect to the prepared WeChat app. Run doctor and retry."
+                                ),
                                 424,
                             )
                         )
@@ -115,6 +124,8 @@ class NativeBridge:
                 # Reader of an old process must never fail a replacement process's requests.
                 if self.process is process:
                     self.observed["connected"] = False
+                    self.stop_reason = self.stop_reason or "bridge_disconnected"
+                    self.stopped.set()
                     for method, future in self.pending.values():
                         code = (
                             "native_send_outcome_unknown"
@@ -157,41 +168,9 @@ class NativeBridge:
             code = "native_send_outcome_unknown" if method in SEND_METHODS else "native_read_timeout"
             raise AppError(code, "Native call timed out; check WeChat before retrying", 504) from None
 
-    def status(self):
-        value = self.request("status")
-        self.observed.update(value)
-        return value
-
-    def chats(self):
-        value = self.request("listChats")
-        items = [resolve_chat(item) for item in value["items"]]
-        for folder in items:
-            if folder.get("folderMembershipKnown"):
-                children = [c for c in items if c.get("parentFolderId") == folder["id"]]
-                folder["childCount"] = len(children)
-                folder["lastMessageTime"] = max(
-                    [folder.get("lastMessageTime", 0)] + [c.get("lastMessageTime", 0) for c in children]
-                )
-        items.sort(key=lambda c: (bool(c.get("isPinned")), c.get("lastMessageTime", 0)), reverse=True)
-        self.observed["enumerationObserved"] = True
-        return {**value, "items": items, "total": len(items), "order": "pinned_then_recent"}
-
-    def messages(self, chat_id, limit=50):
-        value = self.request("listMessages", {"chatId": chat_id, "limit": limit})
-        items = [resolve_message(item) for item in value["items"]]
-        items.sort(
-            key=lambda m: (m.get("timestamp", 0), int(m["id"]) if str(m.get("id", "")).isdigit() else 0),
-            reverse=True,
-        )
-        self.observed["historyVerified"] = bool(items) or self.observed.get("historyVerified", False)
-        return {**value, "items": items, "order": "newest_first"}
-
-    def send(self, chat_id, text):
-        result = self.request("sendText", {"chatId": chat_id, "text": text})
-        return receipt(result, chat_id)
-
     def close(self):
         self.closed = True
+        self.stopped.set()
         process = self.process
         if process:
             try:
@@ -204,26 +183,4 @@ class NativeBridge:
                 except subprocess.TimeoutExpired:
                     process.kill()
                     process.wait(timeout=3)
-        # The worker detaches, leaving WeChat and its login session running.
-
-
-def receipt(result, chat_id):
-    if (
-        not isinstance(result, dict)
-        or result.get("source") != "native"
-        or result.get("receiverVerified") is not True
-        or type(result.get("queued")) is not bool
-        or not isinstance(result.get("requestId"), str)
-    ):
-        raise AppError(
-            "native_send_outcome_unknown", "Unverified send result; check WeChat history before retrying", 502
-        )
-    if not result["queued"]:
-        raise AppError("native_send_rejected", "WeChat declined to queue the message", 409)
-    return {
-        "source": "native",
-        "chatId": chat_id,
-        "requestId": result["requestId"],
-        "acceptedByClient": True,
-        "acknowledgedByServer": False,
-    }
+        # Closing the service detaches; it never logs the user out.

@@ -4,8 +4,8 @@ import time
 
 import pytest
 
-from wechat_cli.errors import AppError
-from wechat_cli.idempotency import Idempotency
+from wechat_cli.core.errors import AppError
+from wechat_cli.core.idempotency import Idempotency
 
 
 def test_receipts_survive_restart(tmp_path):

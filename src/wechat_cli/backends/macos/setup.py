@@ -16,9 +16,9 @@ import urllib.request
 from contextlib import contextmanager
 from pathlib import Path
 
-from .config import ASSETS, load_runtime, private_directory, save_json
-from .errors import AppError
-from .network import ssl_context
+from wechat_cli.core.config import PACKAGE, private_directory, save_json
+from wechat_cli.core.errors import AppError
+from wechat_cli.core.network import ssl_context
 
 WECHAT_URL = "https://dldir1v6.qq.com/weixin/Universal/Mac/WeChatMac_4.1.15.dmg"
 GADGET_URL = (
@@ -26,7 +26,8 @@ GADGET_URL = (
 )
 GADGET_SHA256 = "4cf5433452e745e8b283c7a2e79518c2cd6295e85869589dc3c171d5689e6b8c"
 GADGET_LOAD = b"@executable_path/../Frameworks/FridaGadget.dylib"
-PROFILE = json.loads((ASSETS / "profile.json").read_text())
+ASSETS = Path(__file__).parent / "assets"
+PROFILES = PACKAGE / "compatibility/macos-arm64"
 
 
 def require_macos():
@@ -62,7 +63,7 @@ def check_payload(app):
         actual = fingerprint(app / "Contents/Resources/wechat.dylib")
     except OSError:
         raise AppError("invalid_wechat_app", "Missing Contents/Resources/wechat.dylib", 424) from None
-    for path in sorted((ASSETS / "profiles").glob("*.json")):
+    for path in sorted(PROFILES.glob("*.json")):
         profile = json.loads(path.read_text())
         if actual == profile["payloadSha256"]:
             return profile
@@ -340,3 +341,25 @@ def doctor(directory):
         "fridaVersion": frida.__version__,
         "dataDir": str(directory),
     }
+
+
+def load_runtime(directory):
+    try:
+        value = json.loads((directory / "native-runtime.json").read_text())
+        app = Path(value["app"])
+        library = value["supportLibrary"]
+        if not app.is_absolute() or not isinstance(library, str):
+            raise ValueError()
+        if (
+            Path(library).name != library
+            or not library.startswith("native-reader-")
+            or not library.endswith(".dylib")
+        ):
+            raise ValueError()
+        if not (app / "Contents/Frameworks" / library).is_file():
+            raise ValueError()
+        return {"app": str(app.resolve()), "supportLibrary": library}
+    except (OSError, ValueError, KeyError, TypeError):
+        raise AppError(
+            "native_setup_required", "Run wechat-cli setup --app /path/to/patched/WeChat.app", 424
+        ) from None

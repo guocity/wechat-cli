@@ -1,36 +1,18 @@
-"""One persistent Python service per data directory; no PID-based killing."""
+"""One Uvicorn server owns one native session; commands reuse its local API."""
 
-import fcntl
 import json
 import os
-import signal
+import socket
 import subprocess
 import sys
-import threading
 import time
-from contextlib import contextmanager
 
-from .client import ApiClient
-from .config import private_directory, save_json
-from .errors import AppError
-from .native import NativeBridge
+import uvicorn
 
-
-@contextmanager
-def lock_file(path, blocking=True):
-    private_directory(path.parent)
-    with path.open("a+") as handle:
-        path.chmod(0o600)
-        try:
-            fcntl.flock(handle, fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
-        except BlockingIOError:
-            raise AppError(
-                "server_already_running", "A service is already running for this data directory", 409
-            ) from None
-        try:
-            yield
-        finally:
-            fcntl.flock(handle, fcntl.LOCK_UN)
+from wechat_cli.client import ApiClient
+from wechat_cli.core.config import save_json
+from wechat_cli.core.errors import AppError
+from wechat_cli.host import detached_options, lock_file
 
 
 def configured_port(directory, explicit=None):
@@ -61,9 +43,9 @@ def ensure_server(directory, port, timeout=75):
         with lock_file(directory / "server.lock"):
             pass
         # Validate before spawning so configuration errors are immediately actionable.
-        from .config import load_runtime
+        from wechat_cli.backends.registry import platform_backend
 
-        load_runtime(directory)
+        platform_backend().load_runtime(directory)
         log = directory / "server.log"
         fd = os.open(log, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w") as output:
@@ -81,7 +63,7 @@ def ensure_server(directory, port, timeout=75):
                 stdin=subprocess.DEVNULL,
                 stdout=output,
                 stderr=output,
-                start_new_session=True,
+                **detached_options(),
             )
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
@@ -105,37 +87,64 @@ def ensure_server(directory, port, timeout=75):
 
 
 def serve(directory, port):
-    from .server import ApiServer
+    from wechat_cli.api.app import create_app
 
     with lock_file(directory / "server.lock", blocking=False):
-        native = NativeBridge(directory)
-        server = None
+        # Reserve the port before starting WeChat. No reload or multiple workers.
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        app = None
         try:
-            # Connect eagerly: start really launches WeChat, rather than waiting for the first API call.
-            native.connect()
-            server = ApiServer(("127.0.0.1", port), directory, native=native)
-            save_json(
-                directory / "server.json",
-                {"port": server.server_address[1], "instance": server.instance, "pid": os.getpid()},
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind(("127.0.0.1", port))
+            sock.listen(128)
+            actual_port = sock.getsockname()[1]
+
+            def ready(application):
+                save_json(
+                    directory / "server.json",
+                    {"port": actual_port, "instance": application.state.instance, "pid": os.getpid()},
+                )
+                print(
+                    json.dumps(
+                        {
+                            "listening": f"http://127.0.0.1:{actual_port}",
+                            "message": "Only one WeChat instance is allowed. Closing its main window or quitting WeChat shuts down this server.",
+                        }
+                    ),
+                    flush=True,
+                )
+
+            app = create_app(directory, ready=ready)
+            server = uvicorn.Server(
+                uvicorn.Config(
+                    app,
+                    host="127.0.0.1",
+                    port=actual_port,
+                    workers=1,
+                    lifespan="on",
+                    access_log=False,
+                    log_config=None,
+                    log_level="critical",
+                    proxy_headers=False,
+                    server_header=False,
+                    timeout_graceful_shutdown=5,
+                    limit_concurrency=32,
+                )
             )
-
-            def stop(_signal, _frame):
-                threading.Thread(target=server.shutdown, daemon=True).start()
-
-            previous = {sig: signal.signal(sig, stop) for sig in [signal.SIGINT, signal.SIGTERM]}
-            print(json.dumps({"listening": f"http://127.0.0.1:{server.server_address[1]}"}), flush=True)
+            app.state.shutdown = lambda: setattr(server, "should_exit", True)
             try:
-                server.serve_forever(poll_interval=0.1)
-            finally:
-                for sig, handler in previous.items():
-                    signal.signal(sig, handler)
+                server.run(sockets=[sock])
+            except SystemExit:
+                # Uvicorn exits on lifespan startup failure; preserve our actionable CLI error.
+                if app.state.startup_error:
+                    raise app.state.startup_error from None
+                raise
+            if app.state.startup_error:
+                raise app.state.startup_error
         except OSError as error:
             raise AppError(
                 "server_bind_failed", f"Cannot bind 127.0.0.1:{port}; choose another --port", 409
             ) from error
         finally:
-            if server:
-                server.server_close()
-            else:
-                native.close()
+            sock.close()
             (directory / "server.json").unlink(missing_ok=True)

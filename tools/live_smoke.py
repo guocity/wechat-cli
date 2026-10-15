@@ -5,8 +5,8 @@ import json
 from urllib.parse import urlencode
 
 from wechat_cli.client import ApiClient
-from wechat_cli.config import data_directory
-from wechat_cli.errors import AppError
+from wechat_cli.core.config import data_directory
+from wechat_cli.core.errors import AppError
 
 
 def main():

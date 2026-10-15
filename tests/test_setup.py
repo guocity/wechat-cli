@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from wechat_cli import setup as setup_impl
-from wechat_cli.config import api_token, load_runtime, save_json
-from wechat_cli.errors import AppError
-from wechat_cli.setup import GADGET_LOAD, check_app, download, inject_gadget
+from wechat_cli.backends.macos import setup as setup_impl
+from wechat_cli.backends.macos.setup import GADGET_LOAD, check_app, download, inject_gadget, load_runtime
+from wechat_cli.core.config import api_token, save_json
+from wechat_cli.core.errors import AppError
 
 
 def macho(padding=256):

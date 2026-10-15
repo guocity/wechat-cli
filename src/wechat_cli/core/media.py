@@ -17,9 +17,9 @@ from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from PIL import Image
 
-from .errors import AppError
-from .models import media_descriptor
-from .network import ssl_context
+from wechat_cli.core.errors import AppError
+from wechat_cli.core.models import media_descriptor
+from wechat_cli.core.network import NoRedirect, ssl_context
 
 MAX_MEDIA = 32 * 1024**2
 CDN_HOSTS = {
@@ -111,11 +111,6 @@ def cdn_url(raw):
         raise AppError("media_url_denied", "Media URL is outside the supported WeChat CDN", 422) from None
 
 
-class NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
-
-
 def download_media(raw):
     opener = urllib.request.build_opener(
         urllib.request.ProxyHandler({}), NoRedirect(), urllib.request.HTTPSHandler(context=ssl_context())
@@ -152,7 +147,7 @@ def read_media(native, chat_id, identifier, variant="full"):
         size = details.get("sizeBytes", 0)
         if not 1 <= size <= 128 * 1024**2:
             raise AppError("media_too_large", "Attachment must be 1 byte through 128 MiB", 413)
-        result = native.request("attachmentData", {"chatId": chat_id, "id": identifier})
+        result = native.attachment_data(chat_id, identifier)
         files = result.get("files", [])
         if len(files) > 1:
             raise AppError("native_attachment_ambiguous", "Multiple cached attachments match", 409)
@@ -169,7 +164,7 @@ def read_media(native, chat_id, identifier, variant="full"):
         raise AppError("invalid_media_type", "This message has no supported media")
     descriptor = media_descriptor(message)
     if message["kind"] == "voice":
-        result = native.request("voiceData", {"chatId": chat_id, "id": identifier})
+        result = native.voice_data(chat_id, identifier)
         voice = next((m for m in result.get("items", []) if m["id"] == identifier), {})
         descriptor["md5"] = voice.get("nativeMediaFields", {}).get("voiceFile")
 
@@ -198,7 +193,7 @@ def read_media(native, chat_id, identifier, variant="full"):
             continue
         seen.add(hashed)
         try:
-            cached = native.request("cachedMedia", {"hash": hashed})
+            cached = native.cached_media(hashed)
         except AppError as error:
             if error.code == "native_invalid_media_id":
                 continue
@@ -283,7 +278,15 @@ def codec(action, data, rate=24000):
             source, destination = Path(temporary) / "input", Path(temporary) / "output"
             source.write_bytes(data)
             subprocess.run(
-                [sys.executable, "-m", "wechat_cli.codec", action, str(source), str(destination), str(rate)],
+                [
+                    sys.executable,
+                    "-m",
+                    "wechat_cli.core.codec",
+                    action,
+                    str(source),
+                    str(destination),
+                    str(rate),
+                ],
                 check=True,
                 timeout=15,
                 stdout=subprocess.DEVNULL,

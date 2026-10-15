@@ -5,6 +5,8 @@ import re
 import xml.etree.ElementTree as ET
 from urllib.parse import urlsplit
 
+from .errors import AppError
+
 TYPES = {
     1: ("text", "Text"),
     3: ("image", "Image"),
@@ -257,4 +259,26 @@ def media_descriptor(message):
         "url": web_url(attrs.get("cdnurl", "")) if message["kind"] == "sticker" else None,
         "encryptedUrl": web_url(attrs.get("encrypturl", "")) if message["kind"] == "sticker" else None,
         "thumbnailUrl": web_url(attrs.get("thumburl", "")) if message["kind"] == "sticker" else None,
+    }
+
+
+def receipt(result, chat_id):
+    if (
+        not isinstance(result, dict)
+        or result.get("source") != "native"
+        or result.get("receiverVerified") is not True
+        or type(result.get("queued")) is not bool
+        or not isinstance(result.get("requestId"), str)
+    ):
+        raise AppError(
+            "native_send_outcome_unknown", "Unverified send result; check WeChat history before retrying", 502
+        )
+    if not result["queued"]:
+        raise AppError("native_send_rejected", "WeChat declined to queue the message", 409)
+    return {
+        "source": "native",
+        "chatId": chat_id,
+        "requestId": result["requestId"],
+        "acceptedByClient": True,
+        "acknowledgedByServer": False,
     }

@@ -6,18 +6,16 @@ import secrets
 import tempfile
 from pathlib import Path
 
-from .errors import AppError
+from wechat_cli.core.errors import AppError
+from wechat_cli.host import default_data_directory
 
-ASSETS = Path(__file__).parent / "assets"
+PACKAGE = Path(__file__).resolve().parents[1]
+WEB = PACKAGE / "web"
 
 
 def data_directory(value=None):
     return (
-        Path(
-            value
-            or os.environ.get("WECHAT_CLI_DATA_DIR")
-            or Path.home() / "Library/Application Support/wechat-cli"
-        )
+        Path(value or os.environ.get("WECHAT_CLI_DATA_DIR") or default_data_directory())
         .expanduser()
         .resolve()
     )
@@ -60,25 +58,3 @@ def api_token(directory):
         raise AppError("invalid_api_token", f"Invalid API token in {path}", 424)
     path.chmod(0o600)
     return token
-
-
-def load_runtime(directory):
-    try:
-        value = json.loads((directory / "native-runtime.json").read_text())
-        app = Path(value["app"])
-        library = value["supportLibrary"]
-        if not app.is_absolute() or not isinstance(library, str):
-            raise ValueError()
-        if (
-            Path(library).name != library
-            or not library.startswith("native-reader-")
-            or not library.endswith(".dylib")
-        ):
-            raise ValueError()
-        if not (app / "Contents/Frameworks" / library).is_file():
-            raise ValueError()
-        return {"app": str(app.resolve()), "supportLibrary": library}
-    except (OSError, ValueError, KeyError, TypeError):
-        raise AppError(
-            "native_setup_required", "Run wechat-cli setup --app /path/to/patched/WeChat.app", 424
-        ) from None

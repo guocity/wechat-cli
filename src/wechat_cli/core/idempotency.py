@@ -6,8 +6,8 @@ import sqlite3
 import threading
 import time
 
-from .config import private_directory
-from .errors import AppError
+from wechat_cli.core.config import private_directory
+from wechat_cli.core.errors import AppError
 
 
 class Idempotency:

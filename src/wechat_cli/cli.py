@@ -10,12 +10,13 @@ import webbrowser
 from pathlib import Path
 from urllib.parse import urlencode
 
+from wechat_cli.backends.registry import platform_backend
+from wechat_cli.core.config import data_directory
+from wechat_cli.core.errors import AppError
+from wechat_cli.runtime.lifecycle import configured_port, ensure_server, health, serve
+
 from . import __version__
 from .client import ApiClient
-from .config import data_directory
-from .errors import AppError
-from .lifecycle import configured_port, ensure_server, health, serve
-from .setup import WECHAT_URL, doctor, setup
 
 
 def port_number(value):
@@ -39,7 +40,7 @@ def parser():
     root = argparse.ArgumentParser(
         prog="wechat-cli",
         parents=[common],
-        description="Python CLI, local API and web interface for macOS WeChat",
+        description="Python CLI, local API and web interface for a supported WeChat desktop app",
     )
     root.add_argument("--version", action="version", version=__version__)
     commands = root.add_subparsers(dest="command")
@@ -54,7 +55,7 @@ def parser():
     init.add_argument("--destination", help="New patched app location (must not already exist)")
     init.add_argument("--gadget", help="Use a local Frida Gadget dylib instead of downloading it")
     init.add_argument(
-        "--wechat-url", default=WECHAT_URL, help="HTTPS installer URL (payload must be supported)"
+        "--wechat-url", default=None, help="HTTPS installer URL (default supplied by the platform backend)"
     )
     add("doctor", "Check app, payload, Gadget and Frida installation")
     start = add("start", "Start the patched WeChat and persistent local API")
@@ -122,16 +123,16 @@ def run(args):
     if command == "setup":
         if args.app and (args.destination or args.gadget):
             raise AppError("invalid_options", "--destination and --gadget apply to preparing a new copy")
-        return setup(
+        return platform_backend().setup(
             directory,
             app=args.app,
             source=args.source,
             destination=args.destination,
             gadget=args.gadget,
-            wechat_url=args.wechat_url,
+            **({"wechat_url": args.wechat_url} if args.wechat_url else {}),
         )
     if command == "doctor":
-        return doctor(directory)
+        return platform_backend().doctor(directory)
     if command == "serve" or command == "start" and getattr(args, "foreground", False):
         return serve(directory, port)
     if command == "stop":
@@ -148,7 +149,12 @@ def run(args):
         url = f"http://127.0.0.1:{port}/"
         if command == "web" and not args.no_open:
             webbrowser.open(url)
-        return {"running": True, "url": url, "tokenFile": str(directory / "api-token")}
+        return {
+            "running": True,
+            "url": url,
+            "tokenFile": str(directory / "api-token"),
+            "message": "Only one WeChat instance is allowed. Closing its main window or quitting WeChat shuts down the server.",
+        }
     client = ApiClient(directory, port)
     if command == "status":
         return client.request("/api/native/status")

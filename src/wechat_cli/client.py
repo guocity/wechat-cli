@@ -6,9 +6,9 @@ import urllib.error
 import urllib.request
 from urllib.parse import urlencode
 
-from .config import api_token
-from .errors import AppError
-from .media import NoRedirect
+from wechat_cli.core.config import api_token
+from wechat_cli.core.errors import AppError
+from wechat_cli.core.network import NoRedirect
 
 
 class ApiClient:

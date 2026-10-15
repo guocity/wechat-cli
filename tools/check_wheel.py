@@ -7,18 +7,21 @@ from pathlib import Path
 
 REQUIRED = {
     "wechat_cli/cli.py",
-    "wechat_cli/server.py",
-    "wechat_cli/worker.py",
-    "wechat_cli/assets/native-agent.js",
-    "wechat_cli/assets/startup-notice.js",
-    "wechat_cli/assets/bridge.cpp",
-    "wechat_cli/assets/controls.swift",
-    "wechat_cli/assets/index.html",
-    "wechat_cli/assets/app.js",
-    "wechat_cli/assets/style.css",
-    "wechat_cli/assets/profiles/4.1.13.34-269602.json",
-    "wechat_cli/assets/profiles/4.1.13-269631.json",
-    "wechat_cli/assets/profiles/4.1.15-270135.json",
+    "wechat_cli/backends/macos/assets/gui-lifecycle.js",
+    "wechat_cli/core/contracts.py",
+    "wechat_cli/runtime/transport.py",
+    "wechat_cli/api/app.py",
+    "wechat_cli/backends/macos/worker.py",
+    "wechat_cli/backends/macos/assets/native-agent.js",
+    "wechat_cli/backends/macos/assets/startup-notice.js",
+    "wechat_cli/backends/macos/assets/bridge.cpp",
+    "wechat_cli/backends/macos/assets/controls.swift",
+    "wechat_cli/web/index.html",
+    "wechat_cli/web/app.js",
+    "wechat_cli/web/style.css",
+    "wechat_cli/compatibility/macos-arm64/4.1.13.34-269602.json",
+    "wechat_cli/compatibility/macos-arm64/4.1.13-269631.json",
+    "wechat_cli/compatibility/macos-arm64/4.1.15-270135.json",
 }
 
 

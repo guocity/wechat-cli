@@ -25,7 +25,7 @@ Requires **Apple Silicon macOS**, **Python 3.11+** (managed by uv when necessary
 
 On CLI startup, the bridge automatically accepts WeChat's exact **“opened from the installation package”** location notice with its **“Do not show this message again”** box selected. This policy is installed before the app resumes; setup itself does not need Accessibility permission to configure it.
 
-Quit other WeChat copies before starting the prepared app. Sign in through its normal WeChat window if needed. `start` launches that app and a persistent Python service. Later commands call the service and reuse its session; they do not log in again. `web` also starts the service if needed, then opens its local page. `stop` stops the Python service and leaves WeChat running and signed in.
+Quit other WeChat copies before starting the prepared app. Sign in through its normal WeChat window if needed. `start` launches that app and a persistent FastAPI/Uvicorn service. Later commands call the service and reuse its session; they do not log in again. `web` also starts the service if needed, then opens its local page. `stop` stops the Python service and leaves WeChat running and signed in.
 
 ## Supported payloads
 
@@ -92,7 +92,7 @@ OCR uses WeChat's local recognizer. `transcribe` explicitly initiates WeChat voi
 
 ## REST API and Python client
 
-The default server is `http://127.0.0.1:8787`. It only binds to loopback. Every API request requires the token in:
+The server uses FastAPI and a single Uvicorn worker, with Pydantic input validation and generated OpenAPI. The default server is `http://127.0.0.1:8787`. It only binds to loopback. Every API request requires the token in:
 
 ```text
 ~/Library/Application Support/wechat-cli/api-token
@@ -124,7 +124,7 @@ uvx wechat-cli api /api/messages/send --method POST \
 
 ```python
 from wechat_cli.client import ApiClient
-from wechat_cli.config import data_directory
+from wechat_cli.core.config import data_directory
 
 client = ApiClient(data_directory())
 chats = client.chats()
@@ -132,7 +132,29 @@ history = client.messages("filehelper", limit=20)
 receipt = client.send("filehelper", "Hello", idempotency_key="python-demo-001")
 ```
 
-Select a separate service or port with `--data-dir /absolute/path --port 8788`. A service keeps running until `stop`, Ctrl-C in foreground mode, or system shutdown. Stop it before deleting uv caches or removing the installed package environment. Setup/doctor are local administration operations; chat/media commands go through HTTP.
+Select the service state location and port with `--data-dir /absolute/path --port 8788`. Only one bridge server and one WeChat app instance are allowed per user, including across data directories. A second stock or copied WeChat instance causes a clear command-line error; an existing matching instance can be attached instead of launching another. If another copy appears during a session, the bridge service shuts down without killing either app.
+
+Closing the native WeChat main window, quitting WeChat, or losing the native bridge shuts down the server, releases its socket and locks, and closes its worker and ledger. Hiding or minimizing WeChat preserves the service. Login-window transitions and auxiliary windows are handled separately. The web page detects shutdown, disables controls, and asks you to restart and reload; it never automatically retries sends. `stop` and Ctrl-C also shut down the service while leaving the WeChat app signed in. Stop it before deleting uv caches or removing the installed package environment. Setup/doctor are local administration operations; chat/media commands go through HTTP.
+
+## Package architecture
+
+One package provides the CLI, API and plain JavaScript web interface. Platform code is selected lazily; importing the CLI does not import macOS native modules.
+
+```text
+src/wechat_cli/
+  cli.py, client.py         # CLI and Python HTTP client
+  api/                      # FastAPI app, routes, input schemas and local security
+  core/                     # Backend contract, shared workflows, models, media and idempotency
+  runtime/                  # Uvicorn lifecycle and bounded subprocess RPC transport
+  host/                     # OS paths, locks and detached-process primitives
+  backends/macos/           # Setup, Frida worker, native adapter, Swift/C++ assets
+  compatibility/macos-arm64/ # Validated payload fingerprints and native signatures
+  web/                      # Static HTML, CSS and JavaScript
+```
+
+`core/contracts.py` defines the operations a backend provides. HTTP handlers and media workflows call this contract rather than native RPC method strings or platform controls. The app lifespan owns the backend, idempotency ledger, global instance lock and liveness monitor. Native calls stay in a subprocess with a versioned startup handshake and bounded requests; a disconnected worker cannot relaunch WeChat during an active session.
+
+Only Apple Silicon macOS is currently validated. Windows host primitives are separated, but a native Windows backend remains unimplemented; Windows and Linux return an explicit unsupported-platform error. Add a validated backend and compatibility profiles behind the same contract to extend support. Do not copy macOS ABI assumptions into another backend.
 
 ## Development and release
 
@@ -148,7 +170,7 @@ uv run twine check dist/*
 uvx --from ./dist/wechat_cli-0.1.0-py3-none-any.whl wechat-cli --help
 ```
 
-Before publication, run the built wheel from outside the repository and execute the opt-in read-only live smoke check with a signed-in prepared app. See [validation/README.md](validation/README.md) for the recorded checks and limitations. Tests never send real messages.
+Before publication, run the built wheel from outside the repository and execute the opt-in read-only live smoke check with a signed-in prepared app. See [docs/validation.md](docs/validation.md) for this refactor's checks and limitations. Tests never send real messages.
 
 Publish the reviewed artifacts with your PyPI credentials or a configured trusted publisher:
 

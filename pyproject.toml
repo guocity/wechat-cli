@@ -9,7 +9,7 @@ description = "Local Python CLI, REST API and web interface for macOS WeChat"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "ISC"
-dependencies = ["frida==17.8.0", "cryptography>=44,<49", "Pillow>=11,<13", "pilk>=0.2.4,<0.3", "truststore>=0.10,<1"]
+dependencies = ["fastapi>=0.115,<1", "uvicorn>=0.34,<1", "frida==17.8.0", "cryptography>=44,<49", "Pillow>=11,<13", "pilk>=0.2.4,<0.3", "truststore>=0.10,<1"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",
@@ -30,7 +30,7 @@ packages = ["src/wechat_cli"]
 
 [tool.hatch.build.targets.sdist]
 core-metadata-version = "2.4"
-include = ["/src", "/tests", "/pyproject.toml", "/README.md", "/LICENSE", "/tools", "/validation/README.md"]
+include = ["/src", "/tests", "/pyproject.toml", "/README.md", "/LICENSE", "/tools", "/docs"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
