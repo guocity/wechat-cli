@@ -1,27 +1,18 @@
-# Windows validation
+# Windows native backend validation
 
-Validated on a Windows 11 x64 machine on 2026-10-15. The working checkout is `C:\Users\owner\Documents\github\wechat-cli`, on `codex/windows-validation`, copied from commit `557ee61` with the accompanying portability fixes. SSH was already enabled; no SSH or firewall settings were changed.
+Test host: Windows 11 x64, 2026-10-15. The checkout is under `C:\Users\owner\Documents\github\wechat-cli`. Testing uses the same signed-in Windows user over an existing SSH/RDP session; no firewall, Defender, UAC or SSH settings were changed.
 
-## Shared package
+## Supported native operations
 
-`uv sync --python 3.11 --group dev` installs the project without a compiler. The existing machine Python was 3.15. A Python 3.13 attempt failed because `pilk==0.2.4` has Windows wheels only through Python 3.11; newer Python requires Microsoft C++ Build Tools. Use Python 3.11 for Windows evaluation until the codec packaging is changed.
+The Windows backend supports WeChat **4.1.15.53**: conversation listing, recent local history, text preparation and text sending. The shared FastAPI/Uvicorn server, Python client, CLI and web interface use this backend through the existing contract. Media previews/downloads, file/voice sending, OCR and voice recognition remain unavailable on Windows and are advertised accordingly by `/api/capabilities`.
 
-```powershell
-python -m uv sync --python 3.11 --group dev
-.venv\Scripts\python.exe -m pytest -q
-```
+Live verification found **102 conversations**. A preparation request verified the recipient, Unicode content, native UUID and the vendor object's own type/subtype getters without dispatching. One explicitly authorized labeled File Transfer test was accepted by the native message service and appeared exactly once as an outgoing Unicode history record. Repeating its API request with the same key returned the stored receipt without another native dispatch. Local acceptance does not imply server delivery acknowledgement. An earlier diagnostic attempt was unconfirmed and was not retried.
 
-Result: **102 passed, 1 skipped**. The skip is specifically the macOS destination-parent POSIX permission test. POSIX mode-bit assertions are conditional on the host; their functional token/configuration/idempotency assertions still run on Windows. This does not validate Windows ACL isolation: Windows `chmod` does not implement POSIX private permissions, and the Windows backend remains disabled pending an ACL implementation.
+The agent borrows the active account's own SQLite connections inside the owning WeChat process. Queries use bound parameters, read-only statements, bounded results and per-connection serialization, including guards for vendor NOMUTEX connections. Account changes invalidate connection selection. It does not extract database keys or copy account databases. Text dispatch uses native shared objects and the native asynchronous scheduler. A completion hook matches the request UUID to the native message-service result; dispatch alone is insufficient for an accepted receipt. A missing completion is an uncertain outcome retained by the existing idempotency ledger.
 
-The suite covers authenticated HTTP requests, browser sessions and origin checks, CLI-to-HTTP calls, durable idempotency, real SILK encode/decode, subprocess transport, server shutdown after backend/GUI loss, and instance locks. Its API backend is a test double; these are not live Windows chat/send tests. Additional subprocess tests prove lock contention and release across processes using the real Windows lock implementation. Unicode configuration writes and worker responses use explicit UTF-8, and configuration writes use consistent LF newlines.
+## Setup and payload verification
 
-macOS regression result: **103 passed**; the 11 host/worker tests were rerun after the final newline fix.
-
-The built wheel was also installed using `uv tool run --python 3.11 --from <wheel> wechat-cli --version` from outside the checkout; it returned `0.1.0`. `doctor` returned the intended `unsupported_platform` error with exit code 1. Ruff passed on Windows. The temporary launch task and owned test app were stopped after testing; the extracted vendor files and diagnostic logs remain under the ignored `validation\windows` directory.
-
-## Vendor app and instrumentation
-
-Downloaded the supplied [Tencent installer](https://dldir1v6.qq.com/weixin/Universal/Windows/WeChatWin_4.1.15.exe) directly on Windows. Windows `Get-AuthenticodeSignature` reported **Valid**, with signer Tencent Technology (Shenzhen) Company Limited, for both the installer and extracted launcher. The installer hash matches the earlier static investigation:
+`uvx wechat-cli setup` downloads the supplied [Tencent installer](https://dldir1v6.qq.com/weixin/Universal/Windows/WeChatWin_4.1.15.exe), verifies its exact SHA-256 and Tencent Authenticode signature, extracts its embedded 7z payload with Windows `tar.exe`, checks the complete EXE/DLL hashes and launcher signature, then publishes the prepared directory atomically. Fresh automatic download/extraction and startup were verified. Windows uses runtime Frida attachment; signed vendor PE files are not modified. Vendor binaries and private state are excluded from the wheel.
 
 ```text
 installer:  aa727e6cc74cd7c4e101c350d125508b0230a8a19c1f5304bf6f33dde2e758c5
@@ -29,14 +20,28 @@ Weixin.exe: 15f1c3d8118447aa89d917bf0a3c0743930be500ead8ea65a1d7296a66fee1fc
 Weixin.dll: 88eabf78f961e0abe26b397521b05f4ba6cd752727fb9db74a2b3f660b0400f2
 ```
 
-Official 7-Zip 26.04 extracted `install.7z`, then its complete payload, under `validation\windows\WeChat`. No normal WeChat installation was present. The extracted app **4.1.15.53** launched successfully in the interactive RDP desktop and displayed its QR login window. No account was signed in and no messages were sent. A temporary interactive scheduled task started the GUI because SSH launches use a different Windows session.
+Native mappings were checked against this exact DLL using PE unwind boundaries, disassembly, bounded Ghidra decompilation and live native checks. No third-party hook implementation is bundled. A changed Tencent download or unknown payload fails closed and needs a newly validated profile and package release.
 
-`tools/windows_native_probe.py` attached Frida **17.8.0** to that running process, loaded a script, enumerated and fingerprinted its Weixin EXE/DLL, then detached successfully. It reported `x64` / `windows`. It does not call vendor functions, read chats, modify binaries, or enable the Windows backend. Run it against a manually launched test copy:
+## Automated and packaging checks
 
 ```powershell
-.venv\Scripts\python.exe tools\windows_native_probe.py `
-  --pid <WEIXIN_PID> --exe validation\windows\WeChat\Weixin.exe `
-  --output validation\windows\native-probe.json
+python -m uv sync --python 3.11 --group dev
+.venv\Scripts\python.exe -m pytest -q
+.venv\Scripts\python.exe tools\windows_live_smoke.py --data-dir validation\windows\state --port 8789
 ```
 
-This establishes that a separate extracted Windows copy can start and accept Frida attachment on this machine. It does not prove portability across other Windows versions or security configurations. Native Windows account/session/history/send mapping, x64 ABI helpers, real GUI-close lifecycle handling, process checks, setup integration, and private state ACLs remain required before enabling Windows as a supported backend. The registry continues to reject Windows explicitly.
+The smoke tool is read-only unless `--send-file-transfer` is explicitly supplied. Do not use that flag without permission to send a real message.
+
+Windows: **114 passed, 1 skipped**. The skip checks macOS destination-parent POSIX permissions. macOS: **114 passed, 1 skipped**. Coverage includes HTTP authentication, browser origin/session checks, validation, durable idempotency, Unicode subprocess transport, server shutdown, instance locks, payload tamper detection, bound history queries, exact integer IDs and failed-upgrade rollback. These tests use a fake backend; the live native results above are separate.
+
+The wheel installs and runs outside the checkout on macOS and Windows, including Windows Python **3.15**, without a compiler for core operations. Windows Python 3.12+ omits the unused SILK codec; Python 3.14+ uses standard-library Zstandard decoding. Windows Python 3.11 uses the available codec and Zstandard wheels. Wheel contents, metadata and entry point pass `tools/check_wheel.py` and Twine validation.
+
+State directories, tokens, locks and the request ledger use protected NTFS DACLs for the current user SID, SYSTEM and Administrators. The live API token's ACL was checked for protected inheritance and those principals; POSIX `chmod` is not used as an NTFS privacy guarantee.
+
+Only a matching main WeChat process may be attached. Recognized helper children with the same executable path and a matching parent are excluded from the instance count. Another root, another path or an inaccessible process produces the explicit single-instance error. Native window monitoring runs inside the desktop process so an SSH-launched server can observe it across Windows sessions. `stop` detaches the bridge without logging out or terminating WeChat.
+
+Closing the fresh native login window stopped Uvicorn and released the API port. Starting again reopened WeChat; that close action terminates the vendor process, so a new PID is expected. Main-window restoration records only a previously observed window, bound to the PID and payload fingerprint, rather than displaying arbitrary hidden Qt windows. The explicit user SID ACL also allows a managed app prepared through elevated SSH to launch with the same user's limited desktop token.
+
+The fresh signed-in managed copy returned 102 chats and the single previously verified File Transfer record. A native minimize/restore preserved the service. Hiding its main window stopped the service; startup restored the saved main window in the same signed-in process. No additional messages were sent for these checks.
+
+The built wheel was also run from outside the repository using `uv tool run --python 3.15 --from <wheel> wechat-cli start`. Its Python 3.15 server passed the same read-only 102-chat/one-history-record/native-preparation smoke check and shut down through the installed CLI. A standard-library Zstandard compression/decode round trip also passed. Test APIs were stopped afterward; WeChat remained signed in.

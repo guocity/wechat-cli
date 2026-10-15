@@ -144,3 +144,6 @@ class MacOSBackend:
             "fileSending": "wechat_native_ui",
             "voiceSending": "wechat_native_queue",
         }
+
+
+Backend = MacOSBackend

@@ -11,7 +11,7 @@ Performed on Apple Silicon macOS, October 15, 2026. Python 3.11 development envi
 - Browser: authenticated, rendered 18 real message cards, kept empty sending disabled, and detected service shutdown without automatically resending or reconnecting.
 - Release: Ruff, whitespace checks, wheel/sdist build, Twine metadata checks, package asset/private-state checks and outside-checkout `uvx` execution passed.
 
-The original app bundle was not modified. The live checks used a separately copied app with the current helper. Real text/file/voice sends and cloud voice recognition were not invoked. Windows/Linux native backends remain unsupported; shared structure and host primitives do not imply validated native support.
+The original app bundle was not modified. The live checks used a separately copied app with the current helper. Real text/file/voice sends and cloud voice recognition were not invoked. This section records the original macOS refactor. The subsequent native Windows implementation and live checks are documented in [Windows validation](windows-validation.md). Linux remains unsupported.
 
 ## Startup upgrade regression coverage
 

@@ -6,6 +6,10 @@ import zipfile
 from pathlib import Path
 
 REQUIRED = {
+    "wechat_cli/compatibility/windows.json",
+    "wechat_cli/compatibility/windows-x64/4.1.15.53.json",
+    "wechat_cli/backends/windows/assets/agent.js",
+    "wechat_cli/backends/windows/worker.py",
     "wechat_cli/compatibility/macos.json",
     "wechat_cli/cli.py",
     "wechat_cli/backends/macos/assets/gui-lifecycle.js",
@@ -35,7 +39,7 @@ def main():
         assert REQUIRED <= names, REQUIRED - names
         assert not any(
             ".app/" in n
-            or n.endswith(".dylib")
+            or n.endswith((".dylib", ".exe", ".dll"))
             or "api-token" in n
             or "native-runtime.json" in n
             or ".venv/" in n

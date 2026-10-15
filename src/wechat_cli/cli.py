@@ -50,8 +50,8 @@ def parser():
 
     init = add("setup", "Download and patch a separate compatible WeChat copy, or register an existing one")
     sources = init.add_mutually_exclusive_group()
-    sources.add_argument("--app", help="Register an already patched app")
-    sources.add_argument("--source", help="Copy and patch a local stock WeChat.app")
+    sources.add_argument("--app", help="Register an existing prepared app or Windows directory")
+    sources.add_argument("--source", help="Prepare a local stock WeChat app or Windows directory")
     init.add_argument("--destination", help="New patched app location (must not already exist)")
     init.add_argument("--gadget", help="Use a local Frida Gadget dylib instead of downloading it")
     init.add_argument(
@@ -228,6 +228,10 @@ def run(args):
 
 
 def main(argv=None):
+    if sys.platform == "win32":
+        for stream in (sys.stdout, sys.stderr):
+            if hasattr(stream, "reconfigure"):
+                stream.reconfigure(encoding="utf-8")
     args = parser().parse_args(argv)
     try:
         result = run(args)

@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 
 from wechat_cli.core.errors import AppError
-from wechat_cli.host import default_data_directory
+from wechat_cli.host import default_data_directory, private_permissions
 
 PACKAGE = Path(__file__).resolve().parents[1]
 WEB = PACKAGE / "web"
@@ -23,7 +23,7 @@ def data_directory(value=None):
 
 def private_directory(path):
     path.mkdir(parents=True, exist_ok=True, mode=0o700)
-    path.chmod(0o700)
+    private_permissions(path, directory=True)
     return path
 
 
@@ -56,5 +56,5 @@ def api_token(directory):
     token = path.read_text(encoding="utf-8").strip()
     if not 16 <= len(token) <= 512 or any(c.isspace() for c in token):
         raise AppError("invalid_api_token", f"Invalid API token in {path}", 424)
-    path.chmod(0o600)
+    private_permissions(path)
     return token

@@ -1,0 +1,420 @@
+{
+  "version": "4.1.15.53",
+  "arch": "x64",
+  "executableSha256": "15f1c3d8118447aa89d917bf0a3c0743930be500ead8ea65a1d7296a66fee1fc",
+  "payloadSha256": "88eabf78f961e0abe26b397521b05f4ba6cd752727fb9db74a2b3f660b0400f2",
+  "sqlite": {
+    "libversion": {
+      "offset": "0x35d9190",
+      "signature": "488d05099a0906c3cccccccccccccccc"
+    },
+    "prepare_v2": {
+      "offset": "0x594adf0",
+      "signature": "4883ec38488b44246048894424304c89"
+    },
+    "prepare_v3": {
+      "offset": "0x594ae20",
+      "signature": "4883ec380f284424604183e10f4181c9"
+    },
+    "step": {
+      "offset": "0x591e5c0",
+      "signature": "4157415641554154565755534883ec38"
+    },
+    "finalize": {
+      "offset": "0x591dd30",
+      "signature": "56574883ec284885c9744e4889cf488b"
+    },
+    "column_count": {
+      "offset": "0x591ecb0",
+      "signature": "4885c974080fb781c0000000c331c0c3"
+    },
+    "column_name": {
+      "offset": "0x591f340",
+      "signature": "5657534883ec204885c974450fb781c0"
+    },
+    "column_type": {
+      "offset": "0x591f2b0",
+      "signature": "56574883ec284885c9747589d74889ce"
+    },
+    "column_int64": {
+      "offset": "0x591f040",
+      "signature": "56574883ec284885c9747389d74889ce"
+    },
+    "column_double": {
+      "offset": "0x591ef00",
+      "signature": "56574883ec380f297424204885c97478"
+    },
+    "column_text": {
+      "offset": "0x591f0d0",
+      "signature": "56574883ec284885c9747589d74889ce"
+    },
+    "column_blob": {
+      "offset": "0x591ece0",
+      "signature": "5657534883ec204889ce488d3dff8016"
+    },
+    "column_bytes": {
+      "offset": "0x591edc0",
+      "signature": "56574883ec284885c9747389d74889ce"
+    },
+    "bind_text": {
+      "offset": "0x591fc70",
+      "signature": "4883ec38488b4424604889442420c644"
+    },
+    "bind_int64": {
+      "offset": "0x591fb80",
+      "signature": "5657534883ec204c89c789d34889cee8"
+    },
+    "bind_null": {
+      "offset": "0x591fbd0",
+      "signature": "564883ec204889cee813feffff85c074"
+    },
+    "db_filename": {
+      "offset": "0x35de640",
+      "signature": "56574883ec284889d74889cee8cf8334"
+    },
+    "db_mutex": {
+      "offset": "0x35d9880",
+      "signature": "564883ec304889cee893d1340285c074"
+    },
+    "mutex_try": {
+      "offset": "0x5924790",
+      "signature": "4885c9740748ff256ced0a0631c0c3cc"
+    },
+    "mutex_leave": {
+      "offset": "0x59247a0",
+      "signature": "4885c9740748ff2564ed0a06c3cccccc"
+    },
+    "vfs_find": {
+      "offset": "0x592e0f0",
+      "signature": "5657534883ec204889cbe8c1b0cafd85"
+    },
+    "close": {
+      "offset": "0x35da0e0",
+      "signature": "31d2e909000000cccccccccccccccccc"
+    },
+    "close_v2": {
+      "offset": "0x35da2c0",
+      "signature": "ba01000000e926feffffcccccccccccc"
+    },
+    "stmt_readonly": {
+      "offset": "0x59200d0",
+      "signature": "4885c9740d8b81c8000000c1e80883e0"
+    }
+  },
+  "manager": {
+    "offset": "0x45d10",
+    "signature": "488b05a962b40bc3"
+  },
+  "selfId": {
+    "offset": "0x4f3c0",
+    "signature": "555657534883ec48488d6c244048c74500feffffff488b0d"
+  },
+  "send": {
+    "factory": {
+      "offset": "0x709790",
+      "signature": "555657534883ec38488d6c243048c74500feffffff4889ce"
+    },
+    "release": {
+      "offset": "0x2060",
+      "signature": "564883ec20488b71084885f67423f0ff4e08751d488b0648"
+    },
+    "allocate": {
+      "offset": "0x754641c",
+      "signature": "40534883ec20488bd9eb0f488bcbe8e1cd180085c0741348"
+    },
+    "contextConstructor": {
+      "offset": "0xf910",
+      "signature": "554157415641545657534883ec40488d6c244048c745f8fe"
+    },
+    "dispatch": {
+      "offset": "0x19e3d50",
+      "signature": "5541565657534881ece0010000488dac248000000048c785"
+    },
+    "groupVtable": "0x92e3fb8",
+    "objectSize": 1944,
+    "recipient": 176,
+    "type": 280,
+    "length": 456,
+    "content": 1880,
+    "uuid": 1784,
+    "typeGetter": {
+      "offset": "0x77b720",
+      "signature": "8b8118010000c3cccccccccccccccccc"
+    },
+    "subtypeGetter": {
+      "offset": "0x77b730",
+      "signature": "8b811c010000c3cccccccccccccccccc"
+    },
+    "service": {
+      "offset": "0x17b4720",
+      "signature": "5541574156415541545657534881eca8010000488dac2480"
+    }
+  },
+  "sqliteGuards": {
+    "bind_blob": {
+      "offset": "0x591f840",
+      "signature": "4883ec384585c9781a488b4424604889",
+      "statement": true
+    },
+    "bind_double": {
+      "offset": "0x591f9a0",
+      "signature": "56574883ec380f297424200f28f289d7",
+      "statement": true
+    },
+    "bind_int": {
+      "offset": "0x591fb30",
+      "signature": "5657534883ec204489c389d74889cee8",
+      "statement": true
+    },
+    "bind_int64": {
+      "offset": "0x591fb80",
+      "signature": "5657534883ec204c89c789d34889cee8",
+      "statement": true
+    },
+    "bind_null": {
+      "offset": "0x591fbd0",
+      "signature": "564883ec204889cee813feffff85c074",
+      "statement": true
+    },
+    "bind_parameter_count": {
+      "offset": "0x591ffc0",
+      "signature": "4885c974050fbf4120c331c0c3cccccc",
+      "statement": true
+    },
+    "bind_parameter_index": {
+      "offset": "0x5920010",
+      "signature": "56574883ec284889d64889cf4889d1e8",
+      "statement": true
+    },
+    "bind_parameter_name": {
+      "offset": "0x591ffd0",
+      "signature": "4885c9740c488b89b0000000e97f6f00",
+      "statement": true
+    },
+    "bind_text": {
+      "offset": "0x591fc70",
+      "signature": "4883ec38488b4424604889442420c644",
+      "statement": true
+    },
+    "bind_text16": {
+      "offset": "0x591fcf0",
+      "signature": "4883ec38488b4424604889442420c644",
+      "statement": true
+    },
+    "bind_value": {
+      "offset": "0x591fd10",
+      "signature": "41565657534883ec480f297424304889",
+      "statement": true
+    },
+    "column_blob": {
+      "offset": "0x591ece0",
+      "signature": "5657534883ec204889ce488d3dff8016",
+      "statement": true
+    },
+    "column_bytes": {
+      "offset": "0x591edc0",
+      "signature": "56574883ec284885c9747389d74889ce",
+      "statement": true
+    },
+    "column_bytes16": {
+      "offset": "0x591ee60",
+      "signature": "56574883ec284885c9747389d74889ce",
+      "statement": true
+    },
+    "column_count": {
+      "offset": "0x591ecb0",
+      "signature": "4885c974080fb781c0000000c331c0c3",
+      "statement": true
+    },
+    "column_database_name": {
+      "offset": "0x591f540",
+      "signature": "5657534883ec204885c974440fb781c0",
+      "statement": true
+    },
+    "column_database_name16": {
+      "offset": "0x591f5c0",
+      "signature": "5657534883ec204885c974440fb781c0",
+      "statement": true
+    },
+    "column_decltype": {
+      "offset": "0x591f440",
+      "signature": "5657534883ec204885c974460fb781c0",
+      "statement": true
+    },
+    "column_decltype16": {
+      "offset": "0x591f4c0",
+      "signature": "5657534883ec204885c974460fb781c0",
+      "statement": true
+    },
+    "column_double": {
+      "offset": "0x591ef00",
+      "signature": "56574883ec380f297424204885c97478",
+      "statement": true
+    },
+    "column_int": {
+      "offset": "0x591efa0",
+      "signature": "56574883ec284885c9747389d74889ce",
+      "statement": true
+    },
+    "column_int64": {
+      "offset": "0x591f040",
+      "signature": "56574883ec284885c9747389d74889ce",
+      "statement": true
+    },
+    "column_name": {
+      "offset": "0x591f340",
+      "signature": "5657534883ec204885c974450fb781c0",
+      "statement": true
+    },
+    "column_name16": {
+      "offset": "0x591f3c0",
+      "signature": "5657534883ec204885c974450fb781c0",
+      "statement": true
+    },
+    "column_origin_name": {
+      "offset": "0x591f740",
+      "signature": "5657534883ec204885c974440fb781c0",
+      "statement": true
+    },
+    "column_origin_name16": {
+      "offset": "0x591f7c0",
+      "signature": "5657534883ec204885c974440fb781c0",
+      "statement": true
+    },
+    "column_table_name": {
+      "offset": "0x591f640",
+      "signature": "5657534883ec204885c974460fb781c0",
+      "statement": true
+    },
+    "column_table_name16": {
+      "offset": "0x591f6c0",
+      "signature": "5657534883ec204885c974460fb781c0",
+      "statement": true
+    },
+    "column_text": {
+      "offset": "0x591f0d0",
+      "signature": "56574883ec284885c9747589d74889ce",
+      "statement": true
+    },
+    "column_text16": {
+      "offset": "0x591f210",
+      "signature": "56574883ec284885c9747589d74889ce",
+      "statement": true
+    },
+    "column_type": {
+      "offset": "0x591f2b0",
+      "signature": "56574883ec284885c9747589d74889ce",
+      "statement": true
+    },
+    "column_value": {
+      "offset": "0x591f170",
+      "signature": "5657534883ec204889ce488d3d6f7c16",
+      "statement": true
+    },
+    "bind_zeroblob": {
+      "offset": "0x591fee0",
+      "signature": "5657534883ec204489c789d34889cee8",
+      "statement": true
+    },
+    "bind_blob64": {
+      "offset": "0x591f960",
+      "signature": "4883ec38488b4424604d89ca49c1ea1f",
+      "statement": true
+    },
+    "bind_text64": {
+      "offset": "0x591fc90",
+      "signature": "4883ec38488b4424604d89ca49c1ea1f",
+      "statement": true
+    },
+    "bind_zeroblob64": {
+      "offset": "0x591ff30",
+      "signature": "5657534883ec204c89c789d34889ce48",
+      "statement": true
+    },
+    "bind_pointer": {
+      "offset": "0x591fc00",
+      "signature": "41574156565755534883ec284d89cf4c",
+      "statement": true
+    },
+    "prepare": {
+      "offset": "0x594a030",
+      "signature": "4883ec38488b44246048894424304c89",
+      "statement": false
+    },
+    "prepare_v2": {
+      "offset": "0x594adf0",
+      "signature": "4883ec38488b44246048894424304c89",
+      "statement": false
+    },
+    "prepare_v3": {
+      "offset": "0x594ae20",
+      "signature": "4883ec380f284424604183e10f4181c9",
+      "statement": false
+    },
+    "step": {
+      "offset": "0x591e5c0",
+      "signature": "4157415641554154565755534883ec38",
+      "statement": true
+    },
+    "reset": {
+      "offset": "0x591de70",
+      "signature": "5657534883ec204885c9744f4889cf48",
+      "statement": true
+    },
+    "finalize": {
+      "offset": "0x591dd30",
+      "signature": "56574883ec284885c9744e4889cf488b",
+      "statement": true
+    },
+    "close": {
+      "offset": "0x35da0e0",
+      "signature": "31d2e909000000cccccccccccccccccc",
+      "statement": false
+    },
+    "close_v2": {
+      "offset": "0x35da2c0",
+      "signature": "ba01000000e926feffffcccccccccccc",
+      "statement": false
+    },
+    "exec": {
+      "offset": "0x5933ad0",
+      "signature": "4157415641554154565755534883ec58",
+      "statement": false
+    },
+    "clear_bindings": {
+      "offset": "0x591dee0",
+      "signature": "41565657534883ec284889cf488b0148",
+      "statement": true
+    },
+    "errmsg": {
+      "offset": "0x35dbd40",
+      "signature": "564883ec304885c974374889cee8eeac",
+      "statement": false
+    },
+    "errcode": {
+      "offset": "0x35dbf40",
+      "signature": "56574883ec28be070000004885c97449",
+      "statement": false
+    },
+    "extended_errcode": {
+      "offset": "0x35dbfb0",
+      "signature": "56574883ec28be070000004885c97446",
+      "statement": false
+    },
+    "changes": {
+      "offset": "0x35d9fe0",
+      "signature": "564883ec304889cee833ca340285c074",
+      "statement": false
+    },
+    "total_changes": {
+      "offset": "0x35da030",
+      "signature": "564883ec304889cee8e3c9340285c074",
+      "statement": false
+    },
+    "get_autocommit": {
+      "offset": "0x35dd720",
+      "signature": "564883ec304889cee8f392340285c074",
+      "statement": false
+    }
+  }
+}

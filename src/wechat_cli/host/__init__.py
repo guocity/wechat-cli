@@ -34,3 +34,7 @@ def instance_error():
         "Only one WeChat instance is allowed. Quit the other WeChat app or stop its wechat-cli server, then retry.",
         409,
     )
+
+
+def private_permissions(path, *, directory=False):
+    implementation().private_permissions(path, directory=directory)

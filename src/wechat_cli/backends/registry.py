@@ -10,12 +10,16 @@ def platform_backend():
         from .macos import backend
 
         return backend
+    if platform.system() == "Windows" and platform.machine().lower() in {"amd64", "x86_64"}:
+        from .windows import backend
+
+        return backend
     raise AppError(
         "unsupported_platform",
-        f"No validated WeChat backend for {platform.system()} {platform.machine()}. Apple Silicon macOS is currently supported; Windows support is under investigation.",
+        f"No validated WeChat backend for {platform.system()} {platform.machine()}. Apple Silicon macOS and Windows x64 are currently supported.",
         424,
     )
 
 
 def create_backend(directory):
-    return platform_backend().MacOSBackend(directory)
+    return platform_backend().Backend(directory)

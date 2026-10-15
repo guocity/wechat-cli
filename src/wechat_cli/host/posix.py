@@ -36,3 +36,7 @@ def lock_file(path, blocking=True, *, instance=False):
             yield
         finally:
             fcntl.flock(handle, fcntl.LOCK_UN)
+
+
+def private_permissions(path, *, directory=False):
+    path.chmod(0o700 if directory else 0o600)
