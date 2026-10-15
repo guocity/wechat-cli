@@ -187,7 +187,7 @@ uv run ruff check src tests
 uv run ruff format --check src tests
 uv build --no-sources
 uv run twine check dist/*
-uvx --from ./dist/wechat_cli-0.2.0-py3-none-any.whl wechat-cli --help
+uvx --from ./dist/wechat_cli-0.2.1-py3-none-any.whl wechat-cli --help
 ```
 
 Before publication, run the built wheel from outside the repository and execute the opt-in read-only live smoke check with a signed-in prepared app. See [docs/validation.md](docs/validation.md) for this refactor's checks and limitations. Tests never send real messages.
@@ -195,7 +195,7 @@ Before publication, run the built wheel from outside the repository and execute 
 Publish the reviewed artifacts with your PyPI credentials or a configured trusted publisher:
 
 ```sh
-uv publish dist/wechat_cli-0.2.0-py3-none-any.whl dist/wechat_cli-0.2.0.tar.gz
+uv publish dist/wechat_cli-0.2.1-py3-none-any.whl dist/wechat_cli-0.2.1.tar.gz
 ```
 
 The distribution name and console entry point are both **`wechat-cli`**; the import name is `wechat_cli`. Name availability is not a reservation. Publication is a separate step and is not performed by setup or the test suite. The Python server is independent of the existing `wechat-node` implementation.

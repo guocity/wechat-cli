@@ -1,5 +1,10 @@
 # Release notes
 
+## 0.2.1
+
+- Reset Windows application directory permissions on extraction, doctor, and startup so Task Scheduler launches under limited user tokens succeed without access-denied errors.
+- Gracefully skip SILK codec tests when pilk is not installed on Windows Python 3.15.
+
 ## 0.2.0
 
 - Shared FastAPI/Uvicorn API, CLI and web interface with native macOS and Windows backends.
