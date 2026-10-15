@@ -1,10 +1,18 @@
 import base64
+import importlib.util
 import io
 import math
 import struct
 import wave
 
+import pytest
+
 from wechat_cli.core.media import codec, prepare_voice, silk_duration, voice_preview
+
+pytestmark = pytest.mark.skipif(
+    importlib.util.find_spec("pilk") is None,
+    reason="SILK codec (pilk) is not installed",
+)
 
 
 def test_real_silk_round_trip_and_wav_input():

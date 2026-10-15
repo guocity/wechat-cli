@@ -242,3 +242,17 @@ def test_windows_failed_download_removes_partial_file(tmp_path, monkeypatch):
     assert error.value.code == "download_failed"
     assert not partial.exists()
     assert not destination.exists()
+
+
+def test_windows_reset_permissions_calls_icacls(tmp_path, monkeypatch):
+    calls = []
+
+    def mock_run(cmd, **kwargs):
+        calls.append(cmd)
+        return None
+
+    monkeypatch.setattr(setup.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(setup.subprocess, "run", mock_run)
+    setup.reset_permissions(tmp_path)
+    assert calls == [["icacls.exe", str(tmp_path), "/reset", "/t"]]
+

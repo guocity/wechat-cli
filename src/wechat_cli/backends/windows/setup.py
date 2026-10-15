@@ -26,6 +26,19 @@ def require_windows():
         raise AppError("unsupported_platform", "Windows setup requires Windows x64", 424)
 
 
+def reset_permissions(path):
+    if platform.system() == "Windows":
+        try:
+            subprocess.run(
+                ["icacls.exe", str(path), "/reset", "/t"],
+                capture_output=True,
+                check=False,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except OSError:
+            pass
+
+
 def fingerprint(path):
     with path.open("rb") as source:
         return hashlib.file_digest(source, "sha256").hexdigest()
@@ -215,6 +228,7 @@ def setup(
                 info = check_app(stage)
                 verify_signature(Path(info["executable"]))
                 os.rename(stage, target)
+                reset_permissions(target)
             info = check_app(target)
     runtime = {
         "backend": "windows",
@@ -230,6 +244,7 @@ def setup(
 def doctor(directory):
     require_windows()
     info = check_app(load_runtime(directory)["app"])
+    reset_permissions(info["app"])
     verify_signature(Path(info["executable"]))
     import frida
 
@@ -251,6 +266,7 @@ def ensure_current(directory):
     with lock_file(directory / "upgrade.lock"):
         old = load_runtime(directory)
         if old.get("version") == PROFILE["version"]:
+            reset_permissions(old["app"])
             check_app(old["app"])
             return old
         check_instance(None)

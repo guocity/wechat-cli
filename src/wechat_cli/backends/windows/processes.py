@@ -169,6 +169,17 @@ def launch(executable):
 
         subprocess.Popen([str(executable)], cwd=executable.parent)
     else:
+        import subprocess
+
+        try:
+            subprocess.run(
+                ["icacls.exe", str(Path(executable).parent), "/reset", "/t"],
+                capture_output=True,
+                check=False,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except OSError:
+            pass
         powershell(script, timeout=30)
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
