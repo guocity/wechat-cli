@@ -16,6 +16,7 @@ import urllib.request
 from contextlib import contextmanager
 from pathlib import Path
 
+from wechat_cli import __version__
 from wechat_cli.core.config import PACKAGE, private_directory, save_json
 from wechat_cli.core.errors import AppError
 from wechat_cli.core.network import ssl_context
@@ -113,7 +114,7 @@ def download(url, target, maximum, expected=None):
         return target
     temporary = target.with_suffix(target.suffix + ".part")
     try:
-        request = urllib.request.Request(url, headers={"User-Agent": "wechat-cli/0.1.0"})
+        request = urllib.request.Request(url, headers={"User-Agent": f"wechat-cli/{__version__}"})
         with (
             urllib.request.urlopen(request, timeout=60, context=ssl_context()) as response,
             temporary.open("wb") as output,
