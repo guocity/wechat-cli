@@ -4,6 +4,7 @@ import ctypes
 import os
 import time
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 
 from wechat_cli.core.errors import AppError
@@ -50,6 +51,8 @@ def process_snapshot():
         ctypes.POINTER(wintypes.DWORD),
     ]
     kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+    kernel.GetExitCodeProcess.restype = wintypes.BOOL
     native.NtQueryInformationProcess.argtypes = [
         wintypes.HANDLE,
         wintypes.ULONG,
@@ -70,6 +73,9 @@ def process_snapshot():
             if item.exe.lower() in {"weixin.exe", "wechat.exe"}:
                 handle = kernel.OpenProcess(0x1000, False, item.pid)
                 path, helper_type = None, None
+                # Toolhelp can retain an entry whose process has already exited.
+                # Keep access-denied entries fail-closed; omit only known exits.
+                exited = not handle and ctypes.get_last_error() == 87  # ERROR_INVALID_PARAMETER
                 if handle:
                     try:
                         buffer, size = ctypes.create_unicode_buffer(32768), wintypes.DWORD(32768)
@@ -92,10 +98,14 @@ def process_snapshot():
                                     match = re.search(r"(?:^|\s)--type=([a-z-]+)(?:\s|$)", text)
                                     helper_type = match.group(1) if match else None
                     finally:
+                        exit_code = wintypes.DWORD()
+                        if kernel.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+                            exited = exit_code.value != 259  # STILL_ACTIVE
                         kernel.CloseHandle(handle)
-                processes.append(
-                    {"Id": int(item.pid), "Path": path, "parent": int(item.parent), "type": helper_type}
-                )
+                if not exited:
+                    processes.append(
+                        {"Id": int(item.pid), "Path": path, "parent": int(item.parent), "type": helper_type}
+                    )
             present = kernel.Process32NextW(snapshot, ctypes.byref(item))
     finally:
         kernel.CloseHandle(snapshot)
@@ -115,6 +125,24 @@ HELPER_TYPES = {
 }
 
 
+_OWNED_HELPER_PARENTS = {}
+
+
+@contextmanager
+def owned_helper_parent(pid, executable):
+    _OWNED_HELPER_PARENTS[pid] = Path(executable)
+    try:
+        yield
+    finally:
+        # StopMMMojoEnvironment requests worker shutdown; allow its exit to settle.
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline:
+            if not any(p["parent"] == pid for p in process_snapshot()):
+                break
+            time.sleep(0.05)
+        _OWNED_HELPER_PARENTS.pop(pid, None)
+
+
 def main_processes():
     processes = process_snapshot()
     by_id = {p["Id"]: p for p in processes}
@@ -122,7 +150,10 @@ def main_processes():
         p
         for p in processes
         if not (
-            p["type"] in HELPER_TYPES
+            p["type"] == "wxocr"
+            and p["Path"]
+            and _OWNED_HELPER_PARENTS.get(p["parent"]) == Path(p["Path"])
+            or p["type"] in HELPER_TYPES
             and p["parent"] in by_id
             and p["Path"]
             and by_id[p["parent"]]["Path"]

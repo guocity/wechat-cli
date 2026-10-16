@@ -46,7 +46,11 @@ class WeChatService:
         if message["kind"] != "image":
             raise AppError("invalid_media_type", "Choose an image message")
         data, _, _ = read_media(self.backend, chat, identifier)
-        dimensions = validate_image(data)
+        dimensions = (
+            self.backend.image_dimensions(data)
+            if hasattr(self.backend, "image_dimensions")
+            else validate_image(data)
+        )
         result = self.backend.extract_image_text(base64.b64encode(data).decode())
         if (
             result.get("recognition") != "wechat"
@@ -86,8 +90,8 @@ def transcript(native, chat, identifier, trigger=False):
                 "resultSource": "local_message_record",
                 "conversionTriggered": False,
             }
-        if trigger:
-            value = native.transcribe_voice(chat, identifier)
+    if trigger and value.get("status") in {"unavailable", "failed", "timed_out"}:
+        value = native.transcribe_voice(chat, identifier)
     if value.get("status") not in {"pending", "completed", "failed", "timed_out", "unavailable"}:
         raise AppError("native_invalid_response", "Invalid transcription response", 502)
     if value["status"] == "completed" and (

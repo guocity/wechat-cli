@@ -40,7 +40,7 @@ function remember(db) {
     const account=selfId();
     if(!normalized.split('/').some(part=>part===account||part.startsWith(account+'_')))return;
     const name=normalized.split('/').pop().toLowerCase();
-    if (/^(session|contact|message_\d+|biz_message_\d+|hardlink)\.db$/.test(name) && handles.size < 256) handles.set(db.toString(), {db,name,full,account});
+    if (/^(session|contact|message_\d+|biz_message_\d+|hardlink|media_\d+|message_resource)\.db$/.test(name) && handles.size < 256) handles.set(db.toString(), {db,name,full,account});
   } catch (_) {}
 }
 for (const name of ['prepare_v2','prepare_v3']) hooks.push(Interceptor.attach(entry(profile.sqlite[name]), {onEnter(args) { remember(args[0]); }}));
@@ -291,22 +291,45 @@ hooks.push(Interceptor.attach(entry(sendProfile.service),{
   }
 }));
 let sendSequence=0;
-async function textOperation(chatId,text,send) {
+async function textOperation(chatId,text,send,media=null) {
   if(typeof chatId!=='string'||chatId.length<1||chatId.length>1024||typeof text!=='string'||!text.trim()||text.length>4096||text.includes('\0')||chatId.includes('\0'))throw Error('invalid_input');
   const account=selfId();
   if(query('session.db','SELECT username FROM SessionTable WHERE username=?',[chatId],1).length!==1)throw Error('native_chat_not_found');
   const owned=Memory.alloc(16);owned.writePointer(ptr(0));owned.add(8).writePointer(ptr(0));
   let context=null,submitted=false;
   try {
-    makeText(owned);
+    if(media&&media.kind==='voice'){
+      const makeVoice=new NativeFunction(entry(sendProfile.voiceFactory),'pointer',['pointer','pointer','pointer','pointer','pointer']);
+      const recipient=borrowedBytes(Uint8Array.from(unescape(encodeURIComponent(chatId)),c=>c.charCodeAt(0)));
+      const data=borrowedBytes(Uint8Array.from(media.bytes)),duration=Memory.alloc(4),options=Memory.alloc(56);
+      duration.writeU32(media.duration);options.writeByteArray(new Uint8Array(56));options.add(48).writeU64(15);
+      makeVoice(owned,recipient,data,duration,options);
+    }else makeText(owned);
     const info=owned.readPointer();
     if(info.isNull())throw Error('native_send_allocation_failed');
-    assignEmptyString(info.add(sendProfile.recipient),chatId);
-    assignEmptyString(info.add(sendProfile.content),text);
-    info.add(sendProfile.type).writeU32(1);
-    info.add(sendProfile.length).writeU64(unescape(encodeURIComponent(text)).length);
+    if(!(media&&media.kind==='voice'))assignEmptyString(info.add(sendProfile.recipient),chatId);
+    if(media&&media.kind==='voice'){
+      if(!info.readPointer().equals(module.base.add(sendProfile.voiceVtable)))throw Error('native_voice_layout_unverified');
+      info.add(sendProfile.type).writeU32(34);
+      const value=info.add(sendProfile.voiceData),length=value.add(16).readU64().toNumber(),capacity=value.add(24).readU64().toNumber();
+      if(length!==media.bytes.length||capacity<length||info.add(sendProfile.voiceDuration).readU32()!==media.duration)throw Error('native_voice_layout_unverified');
+      const actual=new Uint8Array((capacity<16?value:value.readPointer()).readByteArray(length));
+      if(actual.some((b,i)=>b!==media.bytes[i]))throw Error('native_voice_layout_unverified');
+    }else if(media){
+      const table=module.base.add(sendProfile.mediaVtable);
+      if(!table.add(8).readPointer().equals(entry(sendProfile.typeGetter))||!table.add(16).readPointer().equals(entry(sendProfile.subtypeGetter))||!table.add(32).readPointer().equals(entry(sendProfile.mediaSerialize)))throw Error('native_send_layout_unverified');
+      info.writePointer(table);
+      info.add(sendProfile.type).writeU32(49);info.add(sendProfile.type+4).writeU32(6);
+      assignEmptyWideString(info.add(sendProfile.filePath),media.path);
+      assignEmptyString(info.add(sendProfile.fileName),media.name);
+      info.add(sendProfile.length).writeU64(media.size);
+    }else{
+      assignEmptyString(info.add(sendProfile.content),text);
+      info.add(sendProfile.type).writeU32(1);
+      info.add(sendProfile.length).writeU64(unescape(encodeURIComponent(text)).length);
+    }
     const requestId=readString(info.add(sendProfile.uuid),128);
-    if(typeGetter(info)!==1||subtypeGetter(info)!==0||!info.readPointer().add(8).readPointer().equals(entry(sendProfile.typeGetter))||!/^[0-9a-fA-F-]{32,38}$/.test(requestId)||readString(info.add(sendProfile.recipient),1024)!==chatId||readString(info.add(sendProfile.content),65536)!==text)throw Error('native_send_layout_unverified');
+    if(typeGetter(info)!==(media?(media.kind==='voice'?34:49):1)||subtypeGetter(info)!==(media&&media.kind!=='voice'?6:0)||!info.readPointer().add(8).readPointer().equals(entry(sendProfile.typeGetter))||!/^[0-9a-fA-F-]{32,38}$/.test(requestId)||readString(info.add(sendProfile.recipient),1024)!==chatId||(!media&&readString(info.add(sendProfile.content),65536)!==text)||(media&&media.kind!=='voice'&&readWideString(info.add(sendProfile.filePath))!==media.path))throw Error('native_send_layout_unverified');
     if(!send)return {source:'native',prepared:true,queued:false,receiverVerified:true,requestId,requestKind:'windows_native_task'};
     if(selfId()!==account)throw Error('native_account_changed');
     const group=Memory.alloc(40);group.writePointer(module.base.add(sendProfile.groupVtable));
@@ -339,3 +362,60 @@ async function textOperation(chatId,text,send) {
 rpc.exports.prepareText=(chat,text)=>textOperation(chat,text,false);
 rpc.exports.sendText=(chat,text)=>textOperation(chat,text,true);
 send({event:'agent_ready'});
+
+// Cache keys never leave WeChat: only the decrypted, bounded image header does.
+rpc.exports.mediaContext=()=>{
+  const account=selfId();discover();
+  const roots=[...new Set([...handles.values()].filter(h=>h.account===account).map(h=>h.full.replace(/\\/g,'/').split('/db_storage/')[0]))];
+  if(roots.length!==1||!roots[0].includes('/'))throw Error('native_account_not_ready');
+  return {account,root:roots[0]};
+};
+rpc.exports.decodeImageHeader=(version,bytes)=>{
+  if(![1,2].includes(version)||!Array.isArray(bytes)||!bytes.length||bytes.length>1048592||bytes.length%16||bytes.some(b=>!Number.isInteger(b)||b<0||b>255))throw Error('invalid_input');
+  const specs=profile.media;
+  const keyFn=new NativeFunction(entry(specs.imageKey),'pointer',['pointer','uint']);
+  const decode=new NativeFunction(entry(specs.imageDecrypt),'uint',['pointer','pointer','uchar','pointer','pointer']);
+  const destroy=new NativeFunction(entry(specs.stringDestroy),'void',['pointer']);
+  const xorFn=new NativeFunction(entry(specs.imageXor),'uchar',[]);
+  const key=Memory.alloc(32),out=Memory.alloc(32),length=Memory.alloc(4),source=Memory.alloc(bytes.length);
+  for(const p of [key,out]){p.writeByteArray(new Uint8Array(32));p.add(24).writeU64(15);}
+  length.writeU32(bytes.length);source.writeByteArray(bytes);
+  try{
+    keyFn(key,version);
+    if(decode(source,length,1,key,out)!==0)throw Error('native_media_decode_failed');
+    const size=out.add(16).readU64().toNumber(),capacity=out.add(24).readU64().toNumber();
+    if(size<1||size>1048576||capacity<size)throw Error('native_media_decode_failed');
+    return {bytes:Array.from(new Uint8Array((capacity<16?out:out.readPointer()).readByteArray(size))),xor:xorFn()&255};
+  }finally{destroy(key);destroy(out);}
+};
+
+function readWideString(value){
+  const length=value.add(16).readU64().toNumber(),capacity=value.add(24).readU64().toNumber();
+  if(length<0||length>32767||capacity<length||capacity>65535)throw Error('native_send_layout_unverified');
+  return length?(capacity<8?value:value.readPointer()).readUtf16String(length):'';
+}
+function assignEmptyWideString(value,text){
+  if(readWideString(value)!=='')throw Error('native_send_layout_unverified');
+  let data=value,capacity=7;const length=text.length,size=(length+1)*2;
+  if(length>7){data=allocate(size>=4096?size+39:size);if(data.isNull())throw Error('native_send_allocation_failed');if(size>=4096){const original=data;data=data.add(39).and(ptr('0xffffffffffffffe0'));data.sub(8).writePointer(original);}capacity=length;value.writePointer(data);}
+  data.writeUtf16String(text);value.add(16).writeU64(length);value.add(24).writeU64(capacity);
+}
+function fileOperation(chat,path,name,size,send){
+  if(typeof path!=='string'||!/^([A-Za-z]:[\\/])/.test(path)||path.length>32767||path.includes('\0')||typeof name!=='string'||!name.trim()||name.length>200||/[\\/:\x00-\x1f]/.test(name)||!Number.isInteger(size)||size<1||size>8388608)throw Error('invalid_input');
+  return textOperation(chat,'file',send,{path,name,size});
+}
+rpc.exports.prepareFile=(chat,path,name,size)=>fileOperation(chat,path,name,size,false);
+rpc.exports.sendFile=(chat,path,name,size)=>fileOperation(chat,path,name,size,true);
+
+function borrowedBytes(bytes){
+  const value=Memory.alloc(32);value.writeByteArray(new Uint8Array(32));
+  if(bytes.length<16){value.writeByteArray(bytes);value.add(24).writeU64(15);}
+  else{const buffer=Memory.alloc(bytes.length+1);buffer.writeByteArray(bytes);buffer.add(bytes.length).writeU8(0);value.writePointer(buffer);value.add(24).writeU64(bytes.length);value._buffer=buffer;}
+  value.add(16).writeU64(bytes.length);return value;
+}
+function voiceOperation(chat,bytes,duration,send){
+  if(!Array.isArray(bytes)||bytes.length<10||bytes.length>1048576||bytes.some(b=>!Number.isInteger(b)||b<0||b>255)||!Number.isInteger(duration)||duration<1000||duration>60000)throw Error('invalid_voice');
+  return textOperation(chat,'voice',send,{kind:'voice',bytes,duration});
+}
+rpc.exports.prepareVoice=(chat,bytes,duration)=>voiceOperation(chat,bytes,duration,false);
+rpc.exports.sendVoice=(chat,bytes,duration)=>voiceOperation(chat,bytes,duration,true);

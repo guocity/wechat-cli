@@ -81,7 +81,11 @@ def send_voice(svc: Service, payload: VoiceInput, key: Key = None):
     if not svc.backend.capabilities().get("voiceSending"):
         raise AppError("native_feature_unavailable", "Voice sending is unavailable on this backend", 424)
     data = payload.model_dump(exclude_none=True)
-    prepared = prepare_voice(data)
+    prepared = (
+        prepare_voice(data, svc.backend.convert_audio)
+        if hasattr(svc.backend, "convert_audio")
+        else prepare_voice(data)
+    )
     return svc.once(
         "/api/messages/voice",
         key,
@@ -96,6 +100,7 @@ def send_voice(svc: Service, payload: VoiceInput, key: Key = None):
 @router.get(
     "/native/media", response_class=Response, responses={200: {"content": {"application/octet-stream": {}}}}
 )
+@router.get("/media", response_class=Response, include_in_schema=False)
 def media(svc: Service, query: Annotated[MediaQuery, Query()]):
     data, mime, name = read_media(svc.backend, query.chatId, query.id, query.variant)
     headers = {"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name, safe='')}"} if name else {}
@@ -122,6 +127,7 @@ def transcribe(svc: Service, payload: MessageRef, key: Key = None):
 
 
 @router.post("/native/images/text")
+@router.post("/ocr", include_in_schema=False)
 def ocr(svc: Service, payload: MessageRef):
     return svc.ocr(payload.chatId, payload.id)
 

@@ -159,7 +159,7 @@ def resolve_message(raw, depth=0):
             size = value(app, "appattach/totallen")
             if size.isdigit():
                 details["sizeBytes"] = int(size)
-            md5 = value(app, "appattach/filemd5") or value(app, "appattach/md5")
+            md5 = value(app, "appattach/filemd5") or value(app, "appattach/md5") or value(app, "md5")
             if re.fullmatch(r"[a-fA-F0-9]{32}", md5):
                 details["md5"] = md5.lower()
         if kind == "quote":

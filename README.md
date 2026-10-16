@@ -27,9 +27,9 @@ It adds Gadget, builds the bundled C++ helper, signs the copy, and records its l
 
 macOS requires **Apple Silicon**, **Python 3.11+** (managed by uv when necessary), **uv**, and **Xcode command-line tools** (`xcode-select --install`). The native helper and SILK codec require a compiler. Setup runs as your normal user; do not use `sudo uvx`.
 
-On **Windows x64**, the same commands download Tencent's verified **4.1.15.53** installer, extract its portable app using Windows `tar.exe`, and prepare `%LOCALAPPDATA%\wechat-cli\apps\WeChat-4.1.15.53`. Python 3.11+ and uv are required; native chat/history/text sending needs no compiler or external 7-Zip. The bridge attaches Frida to the verified main process and preserves the signed vendor binaries. Run as the signed-in desktop user. For SSH launches, the same user must also have an interactive Windows session.
+On **Windows x64**, the same commands download Tencent's verified **4.1.15.53** installer, extract its portable app using Windows `tar.exe`, and prepare `%LOCALAPPDATA%\wechat-cli\apps\WeChat-4.1.15.53`. Python 3.11+ and uv are required; native operations need no compiler or external 7-Zip. The bridge attaches Frida to the verified main process and preserves the signed vendor binaries. Run as the signed-in desktop user. For SSH launches, the same user must also have an interactive Windows session.
 
-Windows supports native chats, history and text sending through the CLI, API and web interface. Media downloads/previews, file/voice sending, OCR and voice recognition currently require macOS; `/api/capabilities` reports this and the web interface hides unsupported controls. Windows 11 x64 is live-tested; ARM Windows and Linux are unsupported.
+Windows supports native chats/history, text/file/voice sending, cached media previews/downloads, local OCR and native voice recognition through the CLI, API and web interface. Media uses the active account’s cache and WeChat’s own codecs; download uncached attachments in WeChat first. OCR requires WeChat’s installed OCR plugin. Recognition can contact WeChat’s servers. `/api/capabilities` reports the available operations. Windows 11 x64 is live-tested; ARM Windows and Linux are unsupported.
 
 On macOS CLI startup, the bridge automatically accepts WeChat's exact **“opened from the installation package”** location notice with its **“Do not show this message again”** box selected. This policy is installed before the app resumes; setup itself does not need Accessibility permission to configure it.
 
@@ -96,13 +96,13 @@ uvx wechat-cli web --no-open
 uvx wechat-cli stop
 ```
 
-Use the exact **string** message IDs returned by `messages`; some exceed JavaScript's precise integer range. History is limited to the latest 100 records per request. `media --output` refuses to overwrite an existing file. Voice input supports SILK, mono 16-bit PCM WAV and raw signed little-endian 16-bit PCM, lasting 1–60 seconds. CLI file/audio uploads are limited to 8 MiB. File sending uses WeChat's UI and requires Accessibility permission for the launching terminal, a uniquely named target chat open in WeChat, and an empty draft.
+Use the exact **string** message IDs returned by `messages`; some exceed JavaScript's precise integer range. History is limited to the latest 100 records per request. `media --output` refuses to overwrite an existing file. Voice input supports SILK, mono 16-bit PCM WAV and raw signed little-endian 16-bit PCM, lasting 1–60 seconds. CLI file/audio uploads are limited to 8 MiB. On macOS, file sending uses WeChat's UI and requires Accessibility permission for the launching terminal, a uniquely named target chat open in WeChat, and an empty draft. Windows file and voice sends use WeChat's native queue; successful receipts confirm local acceptance.
 
 `send --dry-run` constructs and verifies a native message without queuing it. Real send receipts distinguish acceptance by the local client from server acknowledgement; a queued message is not a delivery guarantee.
 
 Each send gets an idempotency key, printed before the API call. **Reuse the same `--key` and the same content when retrying.** The private SQLite ledger retains results for 24 hours, including uncertain outcomes, across service restarts. An interrupted attempt is not automatically resent. Inspect WeChat history before retrying an uncertain send with another key. Keys are scoped to the active account and operation.
 
-OCR uses WeChat's local recognizer. `transcribe` explicitly initiates WeChat voice recognition, which can use WeChat's servers; `transcript` only reads existing recognition state. Downloading uncached stickers can contact supported Tencent CDNs. Native logout, independent QR login, legacy Web WeChat and static reverse-engineering catalogs are not part of this Python gateway.
+OCR uses WeChat's local recognizer. `transcribe` explicitly initiates WeChat voice recognition, which can use WeChat's servers; `transcript` only reads existing recognition state. After a finished recognition failure, use a new `--key` for an explicit retry; repeating the old key returns its stored receipt. Downloading uncached stickers can contact supported Tencent CDNs. Native logout, independent QR login, legacy Web WeChat and static reverse-engineering catalogs are not part of this Python gateway.
 
 ## REST API and Python client
 
@@ -174,7 +174,7 @@ src/wechat_cli/
 
 `compatibility/macos.json` and `compatibility/windows.json` pair the latest validated native profile with its installer URL. Startup upgrades use this shipped manifest and verify the exact payload fingerprint; they do not guess compatibility with an untested vendor update. Background-start commands finish downloads/builds in the foreground before starting the native-startup timeout, and foreground `serve` performs the same check through the backend.
 
-Live Windows evaluation covers signed-in chat/history reads, native text acceptance, an outgoing File Transfer record and durable same-key deduplication. See [Windows validation](docs/windows-validation.md) for exact results and limitations. Unknown payloads are rejected; supporting a future WeChat release requires validating a new native profile. Linux can add another backend behind the shared contract without changing the API or GUI.
+Live Windows evaluation also covers cache image decoding, attachment downloads, local OCR, native SILK conversion and authorized File Transfer file/voice sends. See [Windows validation](docs/windows-validation.md) for exact results and limitations. Unknown payloads are rejected; supporting a future WeChat release requires validating a new native profile. Linux can add another backend behind the shared contract without changing the API or GUI.
 
 ## Development and release
 

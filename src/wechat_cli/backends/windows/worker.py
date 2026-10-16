@@ -45,6 +45,7 @@ def main():
         session.on("detached", detached)
         source = "globalThis.WECHAT_WINDOWS_PROFILE=" + json.dumps(info) + ";\n"
         source += (Path(__file__).parent / "assets/agent.js").read_text(encoding="utf-8")
+        source += "\n" + (Path(__file__).parent / "assets/transcription.js").read_text(encoding="utf-8")
         deadline = time.monotonic() + 30
         while True:
             try:
@@ -123,6 +124,27 @@ def main():
                     )
                 elif method == "selfId":
                     result = exports.self_id()
+                elif method in {"prepareVoice", "sendVoice"}:
+                    from wechat_cli.core.media import decode_upload, silk_duration
+
+                    data = decode_upload(params["dataBase64"], 1048576)
+                    if silk_duration(data) != params["durationMs"]:
+                        raise RuntimeError("invalid_voice")
+                    result = getattr(exports, "prepare_voice" if method == "prepareVoice" else "send_voice")(
+                        params["chatId"], list(data), params["durationMs"]
+                    )
+                elif method in {"voiceTranscript", "transcribeVoice"}:
+                    result = getattr(
+                        exports, "voice_transcript" if method == "voiceTranscript" else "transcribe_voice"
+                    )(params)
+                elif method == "mediaContext":
+                    result = exports.media_context()
+                elif method == "decodeImageHeader":
+                    result = exports.decode_image_header(params["version"], params["bytes"])
+                elif method in {"prepareFile", "sendFile"}:
+                    result = getattr(exports, "prepare_file" if method == "prepareFile" else "send_file")(
+                        params["chatId"], params["path"], params["name"], params["size"]
+                    )
                 elif method in {"prepareText", "sendText"}:
                     result = getattr(exports, "prepare_text" if method == "prepareText" else "send_text")(
                         params["chatId"], params["text"]

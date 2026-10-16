@@ -75,6 +75,15 @@ def decode_media(data, key=None):
         if (mime_type(probe) or "").startswith("image/"):
             return bytes(x ^ xor for x in data)
     if isinstance(key, str) and re.fullmatch(r"[a-fA-F0-9]{32}", key) and len(data) % 16 == 0:
+        if sys.platform == "win32":
+            from wechat_cli.backends.windows.crypto import decrypt
+
+            secret = bytes.fromhex(key)
+            for iv in [bytes(16), secret, None]:
+                plain = decrypt(data, secret, iv)
+                if plain and mime_type(plain):
+                    return plain
+            return None
         require_modules(("cryptography",))
         from cryptography.hazmat.primitives import padding
         from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -165,6 +174,9 @@ def read_media(native, chat_id, identifier, variant="full"):
         raise AppError("invalid_media_type", "This message has no supported media")
     descriptor = media_descriptor(message)
     if message["kind"] == "voice":
+        if hasattr(native, "voice_bytes"):
+            data = voice_preview(native.voice_bytes(message), getattr(native, "convert_audio", codec))
+            return data, mime_type(data), None
         result = native.voice_data(chat_id, identifier)
         voice = next((m for m in result.get("items", []) if m["id"] == identifier), {})
         descriptor["md5"] = voice.get("nativeMediaFields", {}).get("voiceFile")
@@ -206,7 +218,7 @@ def read_media(native, chat_id, identifier, variant="full"):
             data = decode_media(decode_upload(item["dataBase64"], MAX_MEDIA), descriptor.get("key"))
             if data and matches(data):
                 return (
-                    voice_preview(data),
+                    voice_preview(data, getattr(native, "convert_audio", codec)),
                     ("audio/wav" if mime_type(data) == "audio/silk" else mime_type(data)),
                     None,
                 )
@@ -301,10 +313,10 @@ def codec(action, data, rate=24000):
         raise AppError("invalid_voice", "Audio conversion failed", 422) from None
 
 
-def voice_preview(data):
+def voice_preview(data, converter=codec):
     if mime_type(data) != "audio/silk":
         return data
-    pcm = codec("decode", data)
+    pcm = converter("decode", data)
     output = io.BytesIO()
     with wave.open(output, "wb") as wav:
         wav.setnchannels(1)
@@ -314,7 +326,7 @@ def voice_preview(data):
     return output.getvalue()
 
 
-def prepare_voice(input):
+def prepare_voice(input, converter=codec):
     if set(input) - {"chatId", "dataBase64", "format", "sampleRate"}:
         raise AppError("invalid_input", "Use chatId, dataBase64, format and optional sampleRate")
     data = decode_upload(input.get("dataBase64"))
@@ -343,6 +355,6 @@ def prepare_voice(input):
             raise AppError("invalid_voice", "Invalid PCM sample rate or length")
         if not 1 <= len(data) / (rate * 2) <= 60:
             raise AppError("invalid_voice", "Voice messages must last 1–60 seconds")
-        data = codec("encode", data, rate)
+        data = converter("encode", data, rate)
         duration = silk_duration(data)
     return {"chatId": input["chatId"], "dataBase64": base64.b64encode(data).decode(), "durationMs": duration}

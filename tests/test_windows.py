@@ -142,12 +142,22 @@ def test_windows_history_merges_shards_in_native_order(tmp_path, monkeypatch):
     assert all("sort_seq" not in item for item in result["items"])
 
 
-def test_windows_unvalidated_media_reports_unavailable(tmp_path):
+def test_windows_transcription_uses_scoped_record(tmp_path, monkeypatch):
     backend = WindowsBackend(tmp_path)
-    with pytest.raises(AppError) as error:
-        backend.send_file({})
-    assert error.value.code == "native_feature_unavailable"
-    assert backend.capabilities()["voiceSending"] is False
+    record = {"account": "self", "chatId": "filehelper", "id": "1"}
+    monkeypatch.setattr(backend, "voice_record", lambda chat, identifier: record)
+    calls = []
+
+    def request(method, params):
+        calls.append((method, params))
+        return {"status": "pending", "text": None}
+
+    monkeypatch.setattr(backend, "_request", request)
+    assert backend.transcription_result("filehelper", "1")["status"] == "pending"
+    assert backend.transcribe_voice("filehelper", "1")["status"] == "pending"
+    assert calls == [("voiceTranscript", record), ("transcribeVoice", record)]
+    assert backend.capabilities()["voiceSending"] == "wechat_native_queue"
+    assert backend.capabilities()["voiceToText"] == "wechat_native_task"
 
 
 def test_windows_owned_helpers_are_not_extra_instances(tmp_path, monkeypatch):
@@ -255,4 +265,3 @@ def test_windows_reset_permissions_calls_icacls(tmp_path, monkeypatch):
     monkeypatch.setattr(setup.subprocess, "run", mock_run)
     setup.reset_permissions(tmp_path)
     assert calls == [["icacls.exe", str(tmp_path), "/reset", "/t"]]
-

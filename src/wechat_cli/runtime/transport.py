@@ -7,7 +7,7 @@ from concurrent.futures import Future, TimeoutError
 
 from wechat_cli.core.errors import AppError
 
-SEND_METHODS = {"sendText", "sendVoice"}
+SEND_METHODS = {"sendText", "sendVoice", "sendFile"}
 
 
 class WorkerTransport:

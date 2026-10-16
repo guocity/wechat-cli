@@ -251,3 +251,26 @@ def test_text_dry_run_does_not_call_send(api):
     )
     assert result["prepared"] is True and result["queued"] is False
     assert not any(c[0] in {"send", "sendText"} for c in native.calls)
+
+
+def test_explicit_transcription_retry_after_failure(api, monkeypatch):
+    _, client, native = api
+    native.items = [resolve_message({"id": "123", "type": 34, "content": "<msg><voicemsg/></msg>"})]
+    monkeypatch.setattr(native, "transcription_result", lambda *_: {"status": "failed", "text": None})
+    assert client.request("/api/native/voice/transcript?chatId=filehelper&id=123")["status"] == "failed"
+    assert not any(c[0] == "transcribeVoice" for c in native.calls)
+    result = client.request(
+        "/api/native/voice/transcribe",
+        method="POST",
+        data={"chatId": "filehelper", "id": "123"},
+        key="retry-voice-001",
+    )
+    assert result["status"] == "pending"
+    assert len([c for c in native.calls if c[0] == "transcribeVoice"]) == 1
+    client.request(
+        "/api/native/voice/transcribe",
+        method="POST",
+        data={"chatId": "filehelper", "id": "123"},
+        key="retry-voice-001",
+    )
+    assert len([c for c in native.calls if c[0] == "transcribeVoice"]) == 1
