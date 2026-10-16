@@ -219,3 +219,20 @@ browser (768×576 H.264/AAC, 79.435 seconds, readyState 4, playback time advanci
 Download MP4 saved a 5,060,587-byte file matching the recovered bytes. FFmpeg
 completed a full decode without errors. No proxy, separate backend, renderer
 code patching, or additional signing/security changes were used for this fix.
+
+## 2026-10-16: direct native loading supersedes viewer recovery
+
+The previous UI opener and decoded-buffer search are no longer used by the media
+endpoint. A compiled, signed C++ task runs on the existing Finder DedicatedWorker,
+using its task runner and V8 context. The shipped `finderH5ExtTransfer` envelope
+for `pc_findergetcommentdetail` returns an object-bound media URL token and decimal
+64-bit decoding key. The object ID must exactly match the requested card.
+
+The prefix is ISAAC64 encrypted: seed in the first of 256 words, two initialization
+passes, reversed result-word consumption, big-endian byte order, 128 KiB limit.
+The remaining compressed media bytes are unchanged. H.264 format metadata selects
+a browser-compatible rendition. No proxy, packet capture, playback, native-viewer
+opening or runtime machine-code patching is needed. The production helper resolved
+and decoded the authorized File Transfer card in 3.25 seconds; its complete MP4
+matched the earlier verified SHA-256. Existing app-specific research entitlements
+were sufficient; no additional security settings were relaxed.

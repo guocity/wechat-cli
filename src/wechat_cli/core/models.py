@@ -257,6 +257,7 @@ def channels_descriptor(message):
         "thumbnailUrl": web_url(value(media, "coverUrl") or value(media, "thumbUrl")),
         "fileName": value(media, "fileName"),
         "objectId": value(feed, "objectId"),
+        "objectNonceId": value(feed, "objectNonceId"),
     }
 
 

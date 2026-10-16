@@ -279,8 +279,8 @@ uv publish dist/wechat_cli-0.2.2-py3-none-any.whl dist/wechat_cli-0.2.2.tar.gz
 The distribution name and console entry point are both **`wechat-cli`**; the import name is `wechat_cli`. Name availability is not a reservation. Publication is a separate step and is not performed by setup or the test suite. The Python server is independent of the existing `wechat-node` implementation.
 
 Channels cards shared in chats display covers automatically, with **Play video**
-and **Download MP4** controls. On macOS, the approved research build can recover
-video directly from WeChat, automatically opening uncached cards in its native
-Channels history, then cache
-the validated MP4 privately for later playback/downloads. No extra backend or
-proxy is needed. See [setup, usage and current limits](docs/channels-playback.md).
+and **Download MP4** controls. On macOS, the approved research build resolves
+media through WeChat’s background Finder worker and decodes the MP4 locally.
+Uncached cards load without opening the native viewer or waiting for playback.
+Validated MP4s are cached privately for later playback/downloads. No extra backend
+or proxy is needed. See [setup, usage and current limits](docs/channels-playback.md).

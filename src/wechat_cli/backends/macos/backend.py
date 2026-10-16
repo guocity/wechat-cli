@@ -135,7 +135,7 @@ class MacOSBackend:
         from wechat_cli.core.media import channels_filename, complete_mp4, read_channels
         from wechat_cli.core.models import channels_descriptor
 
-        from .channels import recover
+        from .channels_native import download
         from .setup import load_runtime
 
         descriptor = channels_descriptor(message)
@@ -159,24 +159,12 @@ class MacOSBackend:
                     except (OSError, ValueError, KeyError, TypeError):
                         pass
                     return data, "video/mp4", filename
-            try:
-                data, mime, name = read_channels(message, "full")
-            except AppError as error:
-                if error.code not in {"channels_video_unavailable", "channels_media_unavailable"}:
-                    raise
-                if not descriptor.get("url"):
-                    raise
-                if not self.controls.lock.acquire(blocking=False):
-                    raise AppError("native_control_busy", "Another control action is running", 409)
-                try:
-                    data, name = recover(
-                        load_runtime(self.directory)["app"],
-                        descriptor["url"],
-                        prepare=lambda: self.controls.open_channels(self, message),
-                    )
-                finally:
-                    self.controls.lock.release()
+            if descriptor.get("objectId") and descriptor.get("objectNonceId"):
+                data, name = download(load_runtime(self.directory)["app"], message)
                 mime = "video/mp4"
+                name = channels_filename(name or descriptor.get("fileName"), descriptor["objectId"])
+            else:
+                data, mime, name = read_channels(message, "full")
             temporary = cached.with_suffix(".tmp")
             fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
             try:
