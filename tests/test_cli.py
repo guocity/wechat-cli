@@ -52,4 +52,4 @@ def test_installed_module_entry_point():
     result = subprocess.run(
         [sys.executable, "-m", "wechat_cli", "--version"], text=True, capture_output=True, check=True
     )
-    assert result.stdout.strip() == "0.2.1"
+    assert result.stdout.strip() == "0.2.2"

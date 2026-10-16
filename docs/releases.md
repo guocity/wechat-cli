@@ -1,5 +1,10 @@
 # Release notes
 
+## 0.2.2
+
+- Native Moments composer workflow on macOS (`wechat-cli moments post`, API routes, and web interface controls).
+- Windows media support: implement AES decryption via Windows CryptoAPI, image dimension validation for PNG/JPEG, local media caching via hardlinks, and local OCR/transcription primitives.
+
 ## 0.2.1
 
 - Reset Windows application directory permissions on extraction, doctor, and startup so Task Scheduler launches under limited user tokens succeed without access-denied errors.
