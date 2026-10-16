@@ -1,8 +1,8 @@
 """Recover message-correlated MP4 bytes from an approved local playback renderer.
 
 Uses read-only Gadget RPC. No native code patching, proxy, arbitrary URL input,
-or uncorrelated cache-file selection. The research app must already have loaded
-this card in WeChat; signed playback URLs and media buffers are transient.
+or uncorrelated cache-file selection. The optional native opener loads the selected card first; signed playback
+URLs and media buffers are transient.
 """
 
 import json
@@ -34,21 +34,28 @@ SOURCE = """rpc.exports={
 
 
 def playback_urls(text, original):
-    """Require the exact encrypted-file key and digest from the requested card."""
+    """Require the exact encrypted-file key, path, and any digest supplied by the card."""
     expected = urlsplit(cdn_url(original))
     keys = parse_qs(expected.query)
-    if not keys.get("encfilekey") or not keys.get("m"):
+    if not keys.get("encfilekey"):
         return []
-    result = []
+    candidates = []
     for match in re.finditer(r'"url"\s*:\s*("(?:[^"\\]|\\.)*")', text):
         try:
-            candidate = json.loads(match[1])
+            candidates.append(json.loads(match[1]))
+        except (ValueError, TypeError):
+            continue
+    # Chromium also retains the URL as a standalone string, without a JSON field.
+    candidates.extend(re.findall(r"https://[A-Za-z0-9%_~:/?=&.+;@!$()*,-]+", text))
+    result = []
+    for candidate in candidates:
+        try:
             parsed = urlsplit(cdn_url(candidate))
             query = parse_qs(parsed.query)
             if (
                 parsed.path == expected.path
                 and query.get("encfilekey") == keys["encfilekey"]
-                and query.get("m") == keys["m"]
+                and (not keys.get("m") or query.get("m") == keys["m"])
                 and query.get("token")
                 and candidate not in result
             ):
@@ -112,7 +119,7 @@ def recover_reader(reader, original, *, deadline, downloader=download_media):
                 candidates = []
                 for pattern, encoding in patterns:
                     offset_in_chunk = 0
-                    for _ in range(16):
+                    for _ in range(128):
                         at = data.find(pattern, offset_in_chunk)
                         if at < 0:
                             break
@@ -146,7 +153,7 @@ def recover_reader(reader, original, *, deadline, downloader=download_media):
     return None
 
 
-def recover(app, original):
+def recover(app, original, *, prepare=None):
     import frida
 
     expected = (Path(app) / RENDERER).resolve()
@@ -172,57 +179,74 @@ def recover(app, original):
             "Channels recovery requires the approved WeChat playback research build.",
             424,
         ) from None
-    pids = set()
-    for line in process_snapshot().splitlines():
-        pair = line.strip().split(None, 1)
-        if len(pair) == 2 and pair[0].isdigit() and Path(pair[1]).resolve() == expected:
-            pids.add(int(pair[0]))
-    manager = frida.get_device_manager()
-    deadline = time.monotonic() + 75
-    sessions = []
-    try:
-        for candidate in range(port, port + 16):
+
+    def release(endpoint, session, script):
+        # Navigation can destroy a renderer between any two RPCs. Cleanup must
+        # not turn successful recovery (or a normal retry) into an HTTP 500.
+        for cleanup in (
+            lambda: script.unload() if script else None,
+            lambda: session.detach() if session else None,
+            lambda: frida.get_device_manager().remove_remote_device(endpoint),
+        ):
             try:
-                with socket.create_connection(("127.0.0.1", candidate), timeout=0.1):
-                    pass
-            except OSError:
-                continue
-            endpoint = f"127.0.0.1:{candidate}"
-            session = script = None
-            try:
-                device = manager.add_remote_device(endpoint, token=token)
-                session = device.attach("Gadget")
-                script = session.create_script(SOURCE)
-                script.load()
-                identity = script.exports_sync.identity()
-                if (
-                    identity["pid"] not in pids
-                    or Path(identity["path"]).resolve() != expected
-                    or identity["policy"] != "required"
-                ):
-                    raise ValueError()
-                sessions.append((identity["pid"], endpoint, session, script))
+                cleanup()
             except Exception:
-                if script:
-                    script.unload()
-                if session:
-                    session.detach()
-                manager.remove_remote_device(endpoint)
-        for _, _, _, script in sorted(sessions, key=lambda item: item[0], reverse=True):
-            if time.monotonic() > deadline:
-                break
-            result = recover_reader(script.exports_sync, original, deadline=deadline)
-            if result:
-                return result
-    finally:
-        for _, endpoint, session, script in sessions:
-            try:
-                script.unload()
-                session.detach()
-            finally:
-                manager.remove_remote_device(endpoint)
+                pass
+
+    if prepare is not None:
+        prepare()
+        time.sleep(3)  # Allow the native player to create its renderer and load media.
+    deadline = time.monotonic() + 75
+    # AppEx can replace the initial renderer while navigating to the selected feed.
+    # Rediscover endpoints and rescan after loading rather than pinning that first snapshot.
+    while time.monotonic() < deadline:
+        pids = set()
+        for line in process_snapshot().splitlines():
+            pair = line.strip().split(None, 1)
+            if len(pair) == 2 and pair[0].isdigit() and Path(pair[1]).resolve() == expected:
+                pids.add(int(pair[0]))
+        manager = frida.get_device_manager()
+        sessions = []
+        try:
+            for candidate in range(port, port + 16):
+                try:
+                    with socket.create_connection(("127.0.0.1", candidate), timeout=0.1):
+                        pass
+                except OSError:
+                    continue
+                endpoint = f"127.0.0.1:{candidate}"
+                session = script = None
+                try:
+                    device = manager.add_remote_device(endpoint, token=token)
+                    session = device.attach("Gadget")
+                    script = session.create_script(SOURCE)
+                    script.load()
+                    identity = script.exports_sync.identity()
+                    if (
+                        identity["pid"] not in pids
+                        or Path(identity["path"]).resolve() != expected
+                        or identity["policy"] != "required"
+                    ):
+                        raise ValueError()
+                    sessions.append((identity["pid"], endpoint, session, script))
+                except Exception:
+                    release(endpoint, session, script)
+            for _, _, _, script in sorted(sessions, key=lambda item: item[0], reverse=True):
+                if time.monotonic() > deadline:
+                    break
+                try:
+                    result = recover_reader(script.exports_sync, original, deadline=deadline)
+                except (frida.InvalidOperationError, frida.TransportError):
+                    continue
+                if result:
+                    return result
+        finally:
+            for _, endpoint, session, script in sessions:
+                release(endpoint, session, script)
+        if time.monotonic() < deadline:
+            time.sleep(1)
     raise AppError(
         "channels_playback_not_loaded",
-        "Open this Channels card in WeChat and let its video load, then retry Play video or Download MP4.",
+        "WeChat opened the card but its playable media was not available before the timeout. Retry once the native player has loaded.",
         409,
     )

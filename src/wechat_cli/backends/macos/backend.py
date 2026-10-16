@@ -166,7 +166,16 @@ class MacOSBackend:
                     raise
                 if not descriptor.get("url"):
                     raise
-                data, name = recover(load_runtime(self.directory)["app"], descriptor["url"])
+                if not self.controls.lock.acquire(blocking=False):
+                    raise AppError("native_control_busy", "Another control action is running", 409)
+                try:
+                    data, name = recover(
+                        load_runtime(self.directory)["app"],
+                        descriptor["url"],
+                        prepare=lambda: self.controls.open_channels(self, message),
+                    )
+                finally:
+                    self.controls.lock.release()
                 mime = "video/mp4"
             temporary = cached.with_suffix(".tmp")
             fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)

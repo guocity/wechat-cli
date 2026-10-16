@@ -97,6 +97,82 @@ func waitFor(_ root:AXUIElement,_ names:[String],_ seconds:Double=3) throws -> A
     repeat { if let button=try? find(root,names) { return button };Thread.sleep(forTimeInterval:0.1) } while Date()<end
     throw ControlError(code:"native_control_not_found")
 }
+func openChannels(_ root:AXUIElement,_ pid:Int32) throws {
+    guard let name=request["chatName"] as? String, !name.isEmpty,
+          let caption=request["caption"] as? String, !caption.isEmpty,
+          let author=request["author"] as? String, !author.isEmpty else { throw ControlError(code:"channels_card_identity_required") }
+    func windows() -> [AXUIElement] { attribute(root,kAXWindowsAttribute) as? [AXUIElement] ?? [] }
+    func history() -> AXUIElement? {
+        windows().first { w in
+            string(w,kAXTitleAttribute).contains("\""+name+"\"") &&
+            elements(w).contains { string($0,kAXIdentifierAttribute)=="record_type_pagetab_5" }
+        }
+    }
+    if history()==nil {
+        var chat=windows().first { w in elements(w).contains { string($0,kAXIdentifierAttribute)=="current_chat_name_label" && string($0,kAXValueAttribute)==name } }
+        if chat==nil {
+            let sessions=elements(root).filter { string($0,kAXIdentifierAttribute)=="session_item_"+name }
+            guard sessions.count==1 else { throw ControlError(code:"channels_chat_not_visible") }
+            try press(sessions[0]);Thread.sleep(forTimeInterval:0.4)
+            chat=windows().first { w in elements(w).contains { string($0,kAXIdentifierAttribute)=="current_chat_name_label" && string($0,kAXValueAttribute)==name } }
+        }
+        guard let chat=chat else { throw ControlError(code:"channels_chat_not_visible") }
+        AXUIElementPerformAction(chat,kAXRaiseAction as CFString)
+        try press(find(chat,["Chat History","聊天记录"]))
+        let end=Date().addingTimeInterval(3)
+        while history()==nil && Date()<end { Thread.sleep(forTimeInterval:0.1) }
+    }
+    guard let window=history() else { throw ControlError(code:"channels_history_not_found") }
+    AXUIElementPerformAction(window,kAXRaiseAction as CFString)
+    RunLoop.current.run(until:Date().addingTimeInterval(0.5))
+    guard let focused=attribute(root,kAXFocusedWindowAttribute), CFEqual(focused,window) else { throw ControlError(code:"channels_history_not_focused") }
+    guard let tab=elements(window).first(where:{string($0,kAXIdentifierAttribute)=="record_type_pagetab_5"}) else { throw ControlError(code:"channels_history_not_found") }
+    try press(tab);Thread.sleep(forTimeInterval:0.4)
+    func normalized(_ text:String)->String {text.split(whereSeparator:{$0.isWhitespace}).joined(separator:" ")}
+    // The history window may retain its previous scroll position. Start at newest.
+    if let list=elements(window).first(where:{string($0,kAXIdentifierAttribute)=="subtype_message_list"}),
+       let position=attribute(list,kAXPositionAttribute),let size=attribute(list,kAXSizeAttribute) {
+        var origin=CGPoint.zero,extent=CGSize.zero
+        if CFGetTypeID(position)==AXValueGetTypeID(),CFGetTypeID(size)==AXValueGetTypeID(),
+           AXValueGetValue(position as! AXValue,.cgPoint,&origin),AXValueGetValue(size as! AXValue,.cgSize,&extent) {
+            let point=CGPoint(x:origin.x+extent.width/2,y:origin.y+extent.height/2)
+            CGWarpMouseCursorPosition(point)
+            CGEvent(mouseEventSource:nil,mouseType:.mouseMoved,mouseCursorPosition:point,mouseButton:.left)?.post(tap:.cghidEventTap)
+            CGEvent(scrollWheelEvent2Source:nil,units:.pixel,wheelCount:1,wheel1:100000,wheel2:0,wheel3:0)?.post(tap:.cghidEventTap)
+            Thread.sleep(forTimeInterval:0.4)
+        }
+    }
+    var previous="", unchanged=0
+    for _ in 0..<30 {
+        guard let list=elements(window).first(where:{string($0,kAXIdentifierAttribute)=="subtype_message_list"}) else { throw ControlError(code:"channels_history_not_found") }
+        let rows=(attribute(list,kAXChildrenAttribute) as? [AXUIElement] ?? [])
+        let matches=rows.filter { row in
+            let title=normalized(string(row,kAXTitleAttribute)+" "+string(row,kAXValueAttribute))
+            let description=string(row,kAXDescriptionAttribute)
+            return title.hasPrefix(normalized(caption)+" ") && description.components(separatedBy:" | ").first==author
+        }
+        guard matches.count<=1 else { throw ControlError(code:"channels_card_ambiguous") }
+        if let card=matches.first {
+            // History cards expose their own clickable frame, unlike full-width chat bubbles.
+            try press(card)
+            emit(["opened":true]);return
+        }
+        let fingerprint=rows.map{label($0)+string($0,kAXValueAttribute)}.joined(separator:"\n")
+        unchanged=fingerprint==previous ? unchanged+1 : 0;previous=fingerprint
+        if unchanged>=2 { break }
+        guard let position=attribute(list,kAXPositionAttribute),let size=attribute(list,kAXSizeAttribute) else { break }
+        var origin=CGPoint.zero,extent=CGSize.zero
+        guard CFGetTypeID(position)==AXValueGetTypeID(),CFGetTypeID(size)==AXValueGetTypeID(),
+              AXValueGetValue(position as! AXValue,.cgPoint,&origin),AXValueGetValue(size as! AXValue,.cgSize,&extent) else { break }
+        let point=CGPoint(x:origin.x+extent.width/2,y:origin.y+extent.height/2)
+        CGWarpMouseCursorPosition(point)
+        CGEvent(mouseEventSource:nil,mouseType:.mouseMoved,mouseCursorPosition:point,mouseButton:.left)?.post(tap:.cghidEventTap)
+        CGEvent(scrollWheelEvent2Source:nil,units:.pixel,wheelCount:1,wheel1:-500,wheel2:0,wheel3:0)?.post(tap:.cghidEventTap)
+        Thread.sleep(forTimeInterval:0.2)
+    }
+    throw ControlError(code:"channels_card_not_found")
+}
+
 func sendFile(_ root:AXUIElement,_ pid:Int32,_ path:String,_ name:String) throws {
     let expectedChat=state(root)["chatName"] as? String ?? ""
     // A blank draft and exact chat match are checked before entering the picker.
@@ -394,7 +470,7 @@ do {
         while NSWorkspace.shared.frontmostApplication?.processIdentifier != pid && Date()<deadline { RunLoop.current.run(until:Date().addingTimeInterval(0.1)) }
         guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { throw ControlError(code:"native_app_not_frontmost") }
     }
-    if let chatName = request["chatName"] as? String, !chatName.isEmpty {
+    if action != "channels.open", let chatName = request["chatName"] as? String, !chatName.isEmpty {
         guard state(root)["chatName"] as? String == chatName else { throw ControlError(code:"native_active_chat_mismatch") }
     }
     if action == "dictation.start" || action == "recording.start" {
@@ -403,6 +479,8 @@ do {
         AXUIElementSetAttributeValue(composer,kAXFocusedAttribute as CFString,kCFBooleanTrue)
     }
     switch action {
+    case "channels.open":
+        try openChannels(root,pid);exit(0)
     case "moments.list":
         emit(try listMoments(root,pid));exit(0)
     case "login.saved":

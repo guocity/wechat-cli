@@ -198,3 +198,24 @@ The working copy is now managed under the standard CLI data directory. Its origi
 runtime configuration was preserved before selecting the research copy. Recovered
 MP4 data is private and scoped by account, message ID and content. The reproducible
 setup tool was independently run against a fresh copy and passed deep verification.
+
+## 2026-10-16: automatic loading and local viewer handoff
+
+Uncached chat cards now open through the configured app's scoped Channels history.
+The opener resolves a uniquely named chat and a unique caption/author pair from
+native message history, raises the history window, verifies its focus, resets
+its retained scroll position, and activates the matching card. Existing drafts
+are untouched. Recovery continues to verify the exact encrypted-file key and
+path; a digest is required to match only when the card supplies one.
+
+Some cards omit `m` entirely, and Chromium may retain the signed playback URL
+as a standalone string rather than a JSON `url` property. Both representations
+are now supported. Renderer discovery repeats within the recovery deadline
+because AppEx can replace a renderer during navigation. Renderer exit during
+cleanup no longer overrides successful recovery or produces an internal error.
+
+Live verification: the previously failing 02:40:41 card played inside the local
+browser (768×576 H.264/AAC, 79.435 seconds, readyState 4, playback time advancing).
+Download MP4 saved a 5,060,587-byte file matching the recovered bytes. FFmpeg
+completed a full decode without errors. No proxy, separate backend, renderer
+code patching, or additional signing/security changes were used for this fix.

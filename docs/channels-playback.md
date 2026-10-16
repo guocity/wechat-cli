@@ -6,10 +6,11 @@ the configured app and existing local API; no proxy or separate backend is used.
 
 ## Use
 
-1. Open the shared Channels card in the approved WeChat research app and let it
-   load. This makes its authenticated media URL and decoded video buffer available.
-2. Open that conversation in the local viewer. Click **Play video** or
-   **Download MP4**. Initial recovery can take several seconds.
+1. Open the conversation in the local viewer. Click **Play video** or
+   **Download MP4**. For uncached media, the approved WeChat research app opens
+   that exact card through the conversation’s Channels history automatically.
+2. Keep WeChat running while its player loads and the local viewer recovers the
+   MP4. Initial recovery can take several seconds.
 3. The validated MP4 is cached privately per account and message. Later playback
    and downloads work from cache, including after restarting WeChat.
 
@@ -19,7 +20,7 @@ Otherwise the download is named `channels-<objectId>.mp4`; that fallback is not
 an original filename supplied by WeChat.
 
 The existing CLI `media CHAT_ID MESSAGE_ID --output PATH` also uses recovery.
-Arbitrary share-URL resolution is not implemented. Unloaded or unsupported
+Arbitrary share-URL resolution is not implemented. Unavailable or unsupported
 cards produce a clear error instead of substituting an unrelated cached clip.
 Only the validated macOS app version/build and renderer fingerprint are currently
 supported by the research setup tool.

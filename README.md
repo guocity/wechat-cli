@@ -280,6 +280,7 @@ The distribution name and console entry point are both **`wechat-cli`**; the imp
 
 Channels cards shared in chats display covers automatically, with **Play video**
 and **Download MP4** controls. On macOS, the approved research build can recover
-video directly from WeChat after the card has been opened there once, then cache
+video directly from WeChat, automatically opening uncached cards in its native
+Channels history, then cache
 the validated MP4 privately for later playback/downloads. No extra backend or
 proxy is needed. See [setup, usage and current limits](docs/channels-playback.md).

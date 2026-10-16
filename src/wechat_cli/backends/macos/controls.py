@@ -57,7 +57,11 @@ class Controls:
                 input=json.dumps({"pid": pid, "app": runtime["app"], "action": action, **extra}),
                 text=True,
                 capture_output=True,
-                timeout=160 if action in {"moments.compose", "moments.list"} else 60 if action.startswith("moments.") else 20,
+                timeout=160
+                if action in {"moments.compose", "moments.list"}
+                else 60
+                if action.startswith("moments.")
+                else 20,
                 check=True,
             )
             value = json.loads(result.stdout)
@@ -89,6 +93,28 @@ class Controls:
         if not name or sum((c.get("displayName") or c.get("displayString")) == name for c in chats) != 1:
             raise AppError("native_chat_name_ambiguous", "This operation requires a uniquely named chat", 409)
         return name
+
+    def open_channels(self, native, message):
+        """Open a resolved message through WeChat's scoped Channels history."""
+        details = message.get("details", {})
+        chat_id = message.get("chatId")
+        caption, author = details.get("description"), details.get("author")
+        if message.get("kind") != "channels_video" or not chat_id or not caption or not author:
+            raise AppError("channels_card_identity_required", "This card lacks native opening metadata", 409)
+        matches = [
+            item
+            for item in native.messages(chat_id, 100)["items"]
+            if item.get("kind") == "channels_video"
+            and item.get("details", {}).get("description") == caption
+            and item.get("details", {}).get("author") == author
+        ]
+        if len(matches) != 1 or matches[0]["id"] != message["id"]:
+            raise AppError(
+                "channels_card_ambiguous", "Multiple Channels cards have the same caption and author", 409
+            )
+        return self.invoke(
+            "channels.open", chatName=self.chat_name(native, chat_id), caption=caption, author=author
+        )
 
     def download_attachment(self, native, chat_id, identifier):
         if not self.lock.acquire(blocking=False):

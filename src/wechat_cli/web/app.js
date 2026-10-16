@@ -93,7 +93,7 @@ function channelMedia(article,params,current){
     }
     return media;
   }
-  async function attempt(task){status.textContent='Loading Channels media…';try{await task();}catch(error){status.textContent=error.message;}}
+  async function attempt(task){status.textContent='Preparing video in WeChat and loading MP4 for this viewer…';try{await task();}catch(error){status.textContent=error.message;}}
   button(article,'Play video',()=>attempt(async()=>{
     const result=await load();if(!result)return;
     if(!player){player=document.createElement('video');player.controls=true;player.preload='metadata';player.poster=cover.src;player.src=result.url;
