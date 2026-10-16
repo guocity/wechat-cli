@@ -15,12 +15,12 @@ async function api(path, data, binary=false) {
   }
   let response;
   try{response=await fetch(path,options);}catch(error){disconnected();throw error;}
-  if(!response.ok){const error=await response.json();throw Error(error.message||error.error);}
+  if(!response.ok){const error=await response.json();if(data!==undefined&&(path==='/api/moments/compose'||path==='/api/moments/action'&&(data.action!=='post'||error.error==='moment_finish_native_selection')))attempts.delete(path+JSON.stringify(data));throw Error(error.message||error.error);}
   const result=binary?await response.blob():await response.json();
   if(data!==undefined)attempts.delete(path+JSON.stringify(data));
   return result;
 }
-function sync(){el('text').disabled=offline||!capabilities.sendMessages||!selected||busy;el('send').disabled=offline||!capabilities.sendMessages||!selected||busy||!el('text').value.trim();el('send-file').disabled=offline||!selected||busy||!el('file').files.length||!(el('file-kind').value==='file'?capabilities.fileSending:capabilities.voiceSending);el('history').disabled=offline||!selected||busy;}
+function sync(){el('text').disabled=offline||!capabilities.sendMessages||!selected||busy;el('send').disabled=offline||!capabilities.sendMessages||!selected||busy||!el('text').value.trim();el('send-file').disabled=offline||!selected||busy||!el('file').files.length||!(el('file-kind').value==='file'?capabilities.fileSending:capabilities.voiceSending);el('history').disabled=offline||!selected||busy;syncMoment();}
 function disconnected(){
   if(offline)return;offline=true;sequence++;
   document.querySelectorAll('button,input,textarea,select').forEach(control=>{control.disabled=true;});
@@ -94,3 +94,61 @@ el('upload').onsubmit=event=>{event.preventDefault();action(async()=>{
 el('refresh').onclick=()=>action(refresh);el('history').onclick=()=>action(history);el('connection').onclick=()=>action(async()=>{el('status').textContent=JSON.stringify(await api('/api/native/status'),null,2);});
 el('search').oninput=renderChats;el('text').oninput=sync;el('file').onchange=sync;el('file-kind').onchange=sync;el('limit').onchange=()=>action(history);
 action(async()=>{capabilities=await api('/api/capabilities');el('upload').hidden=!(capabilities.fileSending||capabilities.voiceSending);await refresh();sync();});monitor();
+
+// Prepare in the browser, then keep account-dependent editing in WeChat's full composer.
+let momentFiles=[], momentSession='', momentUrls=[];
+const momentDialog=el('moment-dialog');
+function syncMoment(){
+  el('open-moment').hidden=!capabilities.momentsPosting;
+  el('open-moment').disabled=offline||busy;
+  el('moment-prepare').disabled=offline||busy||!momentFiles.length;
+  document.querySelectorAll('[data-moment-action]').forEach(b=>{b.disabled=offline||busy||!momentSession;});
+  el('moment-files').disabled=offline||busy;
+  el('moment-text').disabled=offline||busy;
+}
+function renderMomentMedia(){
+  momentUrls.forEach(url=>URL.revokeObjectURL(url));momentUrls=[];
+  el('moment-preview').replaceChildren();
+  momentFiles.forEach((file,index)=>{
+    const figure=document.createElement('figure'),preview=document.createElement(file.type.startsWith('video/')?'video':'img');
+    const url=URL.createObjectURL(file);momentUrls.push(url);preview.src=url;
+    if(preview.tagName==='VIDEO'){preview.controls=true;preview.preload='metadata';}else preview.alt=file.name;
+    const caption=document.createElement('figcaption');caption.textContent=file.name;
+    const remove=document.createElement('button');remove.type='button';remove.textContent='Remove';
+    remove.onclick=()=>{if(busy)return;momentFiles.splice(index,1);renderMomentMedia();syncMoment();};
+    figure.append(preview,caption,remove);el('moment-preview').append(figure);
+  });
+}
+el('open-moment').onclick=()=>{syncMoment();momentDialog.showModal();};
+el('moment-close').onclick=()=>momentDialog.close();
+el('moment-files').onchange=()=>action(async()=>{
+  const added=[...el('moment-files').files];el('moment-files').value='';
+  const files=[...momentFiles,...added], videos=files.filter(f=>f.type.startsWith('video/'));
+  if(files.length>9||videos.length&&(files.length!==1||videos.length!==1))throw Error('Choose up to 9 photos or one video; media types cannot be mixed.');
+  if(files.some(f=>!['image/jpeg','image/png','video/mp4','video/quicktime'].includes(f.type)))throw Error('Choose JPEG/PNG photos or an MP4/MOV video.');
+  if(files.some(f=>f.size>(f.type.startsWith('video/')?64:8)*1024**2)||files.reduce((n,f)=>n+f.size,0)>64*1024**2)throw Error('Photos: 8 MiB each. Video and combined total: 64 MiB.');
+  momentFiles=files;renderMomentMedia();syncMoment();
+});
+async function momentTask(task){
+  if(busy||offline)return;busy=true;sync();syncMoment();
+  try{await task();}catch(error){el('moment-status').textContent=error.message;}
+  finally{busy=false;sync();syncMoment();}
+}
+el('moment-form').onsubmit=event=>{event.preventDefault();momentTask(async()=>{
+  if(!momentFiles.length)return;
+  el('moment-status').textContent='Validating media and opening WeChat…';
+  const media=[];
+  for(const file of momentFiles){const bytes=new Uint8Array(await file.arrayBuffer());let encoded='';for(let i=0;i<bytes.length;i+=16384)encoded+=String.fromCharCode(...bytes.subarray(i,i+16384));media.push({dataBase64:btoa(encoded)});}
+  const result=await api('/api/moments/compose',{text:el('moment-text').value,kind:momentFiles[0].type.startsWith('video/')?'video':'images',media});
+  momentSession=result.sessionId;el('moment-form').hidden=true;el('moment-native').hidden=false;
+  el('moment-status').textContent='Draft open in WeChat. Edit there, choose mentions and visibility, then Post or discard.';
+});};
+function resetMoment(){momentSession='';momentFiles=[];renderMomentMedia();el('moment-text').value='';el('moment-native').hidden=true;el('moment-form').hidden=false;}
+document.querySelectorAll('[data-moment-action]').forEach(button=>button.onclick=()=>momentTask(async()=>{
+  const action=button.dataset.momentAction;
+  const result=await api('/api/moments/action',{sessionId:momentSession,action});
+  if(['submitted','cancelled','closed'].includes(result.status)){
+    resetMoment();
+    el('moment-status').textContent=result.status==='submitted'?'Submitted through WeChat. Check Moments for publication; server acknowledgement is unavailable.':result.status==='closed'?'Native composer closed. Check Moments if you posted directly in WeChat.':'Draft discarded.';
+  }else el('moment-status').textContent=result.status==='native_selection'?'Complete this selection in WeChat, then return here.':'Native composer is open. Caption: '+(result.text||'(empty)');
+}));

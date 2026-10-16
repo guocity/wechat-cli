@@ -22,6 +22,7 @@ class Controls:
     def __init__(self, directory):
         self.directory = directory
         self.lock = threading.Lock()
+        self.moment_session = None
 
     def invoke(self, action, **extra):
         runtime = load_runtime(self.directory)
@@ -55,7 +56,7 @@ class Controls:
                 input=json.dumps({"pid": int(matches[0]), "app": runtime["app"], "action": action, **extra}),
                 text=True,
                 capture_output=True,
-                timeout=20,
+                timeout=160 if action == "moments.compose" else 60 if action.startswith("moments.") else 20,
                 check=True,
             )
             value = json.loads(result.stdout)
@@ -65,11 +66,15 @@ class Controls:
             ) from None
         if value.get("error"):
             code = value["error"]
-            message = (
-                "Allow Accessibility for the terminal running wechat-cli in macOS System Settings."
-                if code == "native_accessibility_required"
-                else code.replace("_", " ")
-            )
+            message = {
+                "native_accessibility_required": "Allow Accessibility for the terminal running wechat-cli in macOS System Settings.",
+                "moment_invalid_video": "Use a playable video with a video track lasting more than zero and at most 30 seconds.",
+                "moment_existing_draft": "A native Moments draft already exists. Finish or discard it in WeChat before opening another.",
+                "moment_finish_native_selection": "Finish or close the native selector or AI assistant in WeChat, then retry with a new key.",
+                "moment_post_outcome_unknown": "Post was clicked but publication could not be verified. Inspect Moments before trying again.",
+                "moment_media_count_mismatch": "WeChat did not load the expected number of photos. Inspect and discard this draft before retrying.",
+                "moment_close_native_dialogs": "Close the current native dialog before opening a Moments draft.",
+            }.get(code, code.replace("_", " "))
             error = AppError(code, message, 409)
             error.possible_send = value.get("possibleSend", True)
             raise error

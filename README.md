@@ -104,6 +104,70 @@ Each send gets an idempotency key, printed before the API call. **Reuse the same
 
 OCR uses WeChat's local recognizer. `transcribe` explicitly initiates WeChat voice recognition, which can use WeChat's servers; `transcript` only reads existing recognition state. After a finished recognition failure, use a new `--key` for an explicit retry; repeating the old key returns its stored receipt. Downloading uncached stickers can contact supported Tencent CDNs. Native logout, independent QR login, legacy Web WeChat and static reverse-engineering catalogs are not part of this Python gateway.
 
+## Moments on macOS
+
+The local web interface has a **Post a Moment** button. Choose 1–9 still JPEG/PNG
+photos or one playable video of at most **30 seconds**, add a caption, then select
+**Continue in WeChat**. Photos are limited to 8 MiB each; a video and the combined
+upload are limited to 64 MiB. Video duration is read with macOS AVFoundation;
+client-supplied filenames or duration values are not trusted. Photos are checked
+for valid contents, a single frame, and at most 40 megapixels.
+
+The full native WeChat composer handles the remaining screen features:
+
+- Edit the caption and insert emoji through the native picker.
+- Add photos, preview them, and remove them using WeChat's media controls.
+- Open **AI 帮写**, which uses WeChat's Xiaowei assistant when enabled for the account.
+- Open **Mention** and select contacts from the native contact picker.
+- Open **Visible To** and choose All, Private, selected friends/tags, or Don't Share.
+- Post the reviewed draft, or discard it. Closing the browser panel keeps the native draft.
+
+The web panel has shortcuts for each native feature. Contact/tag selection,
+emoji selection, media editing after opening the draft, and AI interaction are
+completed **in WeChat**, rather than emulated by the local web page. Finish or
+close a native selector before using another action. AI is not run automatically. Any first-use AI terms or privacy authorization
+must be reviewed and completed by the user in WeChat.
+These operations require Accessibility permission for the terminal launching the
+service. Existing native drafts and open dialogs are never overwritten. Windows
+does not advertise this capability and returns `native_feature_unavailable`.
+
+```sh
+# Open for review and use all native composer features:
+wechat-cli moment --text 'A good day' --image ./one.jpg --image ./two.png --key moment-001
+wechat-cli moment --video ./clip.mp4 --key moment-video-001
+# Use the sessionId returned above:
+wechat-cli moment-action SESSION_ID mention --key moment-mention-001
+wechat-cli moment-action SESSION_ID visibility --key moment-audience-001
+wechat-cli moment-action SESSION_ID status
+wechat-cli moment-action SESSION_ID post --key moment-post-001
+wechat-cli moment-action SESSION_ID cancel --key moment-discard-001
+# Explicit immediate submission, using the audience shown by WeChat:
+wechat-cli moment --text 'A good day' --image ./one.jpg --post --key moment-direct-001
+```
+
+`POST /api/moments/compose` opens a draft. `POST /api/moments/post` opens and
+immediately submits it. Both accept
+`{"text":"caption","kind":"images","media":[{"dataBase64":"…"}]}`;
+use `"kind":"video"` with exactly one media item for video. The compose response
+contains `sessionId`. `POST /api/moments/action` accepts
+`{"sessionId":"…","action":"status"}`. Actions are `status`, `emoji`, `add-media`,
+`ai`, `mention`, `visibility`, `cancel`, and `post`. Mutations require an
+`Idempotency-Key`; status does not. Python clients expose `compose_moment` and
+`moment_action`. Native selections are interactive, not contact IDs accepted by
+the HTTP API.
+
+A `submitted` receipt means the native Post button was clicked and the composer
+closed. It is **not** proof of publication: `acknowledgedByServer` remains false.
+No public post ID or server acknowledgement is available through this UI adapter.
+Inspect Moments after submitting. Reuse the same key for retries; uncertain final
+clicks consume the session, preventing another automatic Post click. If you post
+or cancel directly in WeChat, refresh draft status before opening another draft.
+Sessions last until the service stops; after restarting, finish a surviving draft
+in WeChat. Uploaded media is private, with at most eight retained upload directories. Files
+older than an hour are cleaned up when a later draft is prepared; finish any
+surviving native draft before starting another. Limits on media manually added inside WeChat follow the
+vendor app's own validation.
+
 ## REST API and Python client
 
 The server uses FastAPI and a single Uvicorn worker, with Pydantic input validation and generated OpenAPI. The default server is `http://127.0.0.1:8787`. It only binds to loopback. Every API request requires the token in:

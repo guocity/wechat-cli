@@ -110,7 +110,9 @@ class LocalSecurity:
             if "transfer-encoding" in headers or not re.fullmatch(r"\d{1,9}", length):
                 raise AppError("invalid_content_length", "Supply a bounded Content-Length", 411)
             maximum = (
-                12 * 1024**2
+                86 * 1024**2
+                if path in {"/api/moments/post", "/api/moments/compose"}
+                else 12 * 1024**2
                 if path in {"/api/messages/file", "/api/messages/voice"}
                 else 1024
                 if session

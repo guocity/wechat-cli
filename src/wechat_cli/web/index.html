@@ -1,10 +1,36 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>WeChat local</title><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
-<body><header><div><strong>WeChat local</strong><span>Python gateway</span></div><button id="refresh">Refresh chats</button><button id="connection">Connection</button></header>
+<body><header><div><strong>WeChat local</strong><span>Python gateway</span></div><button id="open-moment" hidden>Post a Moment</button><button id="refresh">Refresh chats</button><button id="connection">Connection</button></header>
 <p id="status" role="status" aria-live="polite">Connecting to your local session…</p>
 <main><aside aria-label="Conversations"><label for="search">Conversations</label><input id="search" type="search" placeholder="Search by name or ID"><nav id="chats"></nav></aside>
 <section id="conversation"><div class="conversation-title"><h1 id="title">Select a conversation</h1><label>History <select id="limit"><option>20</option><option selected>50</option><option>100</option></select></label><button id="history" disabled>Refresh history</button></div>
 <div id="messages" aria-live="polite"></div><form id="compose"><label for="text">Message</label><textarea id="text" maxlength="4096" rows="3" disabled placeholder="Write a message…"></textarea><button id="send" disabled>Send text</button></form>
 <form id="upload"><label for="file">Send file or voice</label><input type="file" id="file"><select id="file-kind"><option value="file">File</option><option value="wav">Voice (mono PCM WAV)</option><option value="silk">Voice (SILK)</option></select><button id="send-file" disabled>Send upload</button></form></section></main>
-<footer>Sign into the configured WeChat app. File sending requires its target chat to be open and Accessibility permission.</footer></body></html>
+<dialog id="moment-dialog" aria-labelledby="moment-title">
+<h1 id="moment-title">Post a Moment</h1>
+<p id="moment-status" role="status">Choose up to 9 photos or one video up to 30 seconds.</p>
+<form id="moment-form">
+<label for="moment-text">Say something…</label><textarea id="moment-text" rows="4" maxlength="4096" placeholder="Say something…"></textarea>
+<div id="moment-preview" aria-label="Selected media"></div>
+<label for="moment-files">Add photos or a video</label><input id="moment-files" type="file" multiple accept="image/jpeg,image/png,video/mp4,video/quicktime">
+<p>JPEG/PNG: 8 MiB each. Video: 64 MiB. Total: 64 MiB.</p>
+<button id="moment-prepare">Continue in WeChat</button>
+</form>
+<div id="moment-native" hidden>
+<p>Edit the caption and media in the WeChat window. These buttons open its native controls; complete each selection there before returning.</p>
+<div class="moment-tools">
+<button type="button" data-moment-action="emoji">☺ Emoji</button>
+<button type="button" data-moment-action="add-media">＋ Add media</button>
+<button type="button" data-moment-action="ai">AI 帮写</button>
+<button type="button" data-moment-action="mention">@ Mention</button>
+<button type="button" data-moment-action="visibility">Visible To</button>
+<button type="button" data-moment-action="status">Refresh draft status</button>
+</div>
+<p>Visibility supports All, Private, selected friends/tags, and Don't Share. Remove photos using the native preview. AI writing uses WeChat's Xiaowei assistant when available.</p>
+<button type="button" data-moment-action="cancel">Discard draft</button>
+<button type="button" data-moment-action="post" class="moment-post">Post</button>
+</div>
+<button id="moment-close" type="button">Close panel</button>
+</dialog>
+<footer>Sign into the configured WeChat app. File sending and Moments require Accessibility permission for the launching terminal.</footer></body></html>

@@ -3,7 +3,7 @@
 import re
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 def valid_chat(value):
@@ -68,3 +68,31 @@ class VoiceInput(Empty):
     dataBase64: str = Field(min_length=1, max_length=11184812)
     format: Literal["silk", "wav", "pcm_s16le"]
     sampleRate: int | None = None
+
+
+class MomentMedia(Empty):
+    dataBase64: str = Field(min_length=1, max_length=89478488)
+
+
+class MomentInput(Empty):
+    text: str = Field(default="", max_length=4096)
+    kind: Literal["images", "video"]
+    media: list[MomentMedia] = Field(min_length=1, max_length=9)
+
+    @model_validator(mode="after")
+    def video_is_single(self):
+        if self.kind == "video" and len(self.media) != 1:
+            raise ValueError("Choose exactly one video")
+        return self
+
+    @field_validator("text")
+    @classmethod
+    def valid_caption(cls, value):
+        if "\0" in value:
+            raise ValueError("Caption cannot contain NUL")
+        return value
+
+
+class MomentAction(Empty):
+    sessionId: str = Field(pattern=r"^[a-f0-9-]{36}$")
+    action: Literal["status", "post", "cancel", "emoji", "mention", "visibility", "ai", "add-media"]

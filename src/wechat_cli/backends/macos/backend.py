@@ -128,6 +128,21 @@ class MacOSBackend:
     def send_file(self, payload):
         return self.controls.send_file(self, payload)
 
+    def post_moment(self, payload):
+        from .moments import post_moment
+
+        return post_moment(self.controls, payload)
+
+    def compose_moment(self, payload):
+        from .moments import prepare_moment
+
+        return prepare_moment(self.controls, payload)
+
+    def moment_action(self, session_id, action):
+        from .moments import moment_action
+
+        return moment_action(self.controls, session_id, action)
+
     def download_attachment(self, chat_id, identifier):
         return self.controls.download_attachment(self, chat_id, identifier)
 
@@ -143,6 +158,7 @@ class MacOSBackend:
             "imageTextExtraction": "wechat_local_ocr",
             "fileSending": "wechat_native_ui",
             "voiceSending": "wechat_native_queue",
+            "momentsPosting": "wechat_native_ui",
         }
 
 

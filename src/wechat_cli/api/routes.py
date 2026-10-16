@@ -11,7 +11,17 @@ from wechat_cli.core.media import prepare_voice, read_media
 from wechat_cli.core.models import receipt
 from wechat_cli.core.services import WeChatService, transcript
 
-from .schemas import Empty, FileInput, HistoryQuery, MediaQuery, MessageRef, TextInput, VoiceInput
+from .schemas import (
+    Empty,
+    FileInput,
+    HistoryQuery,
+    MediaQuery,
+    MessageRef,
+    MomentAction,
+    MomentInput,
+    TextInput,
+    VoiceInput,
+)
 
 router = APIRouter(prefix="/api")
 
@@ -57,6 +67,36 @@ def controls(svc: Service, query: Annotated[Empty, Query()]):
 @router.post("/messages/prepare")
 def prepare_text(svc: Service, payload: TextInput):
     return svc.prepare_text(payload.chatId, payload.text)
+
+
+@router.post("/moments/post")
+def post_moment(svc: Service, payload: MomentInput, key: Key = None):
+    if not svc.backend.capabilities().get("momentsPosting"):
+        raise AppError("native_feature_unavailable", "Moments posting requires macOS", 424)
+    data = payload.model_dump()
+    return svc.once("/api/moments/post", key, data, lambda: svc.backend.post_moment(data))
+
+
+@router.post("/moments/compose")
+def compose_moment(svc: Service, payload: MomentInput, key: Key = None):
+    if not svc.backend.capabilities().get("momentsPosting"):
+        raise AppError("native_feature_unavailable", "Moments posting requires macOS", 424)
+    data = payload.model_dump()
+    return svc.once("/api/moments/compose", key, data, lambda: svc.backend.compose_moment(data))
+
+
+@router.post("/moments/action")
+def moment_action(svc: Service, payload: MomentAction, key: Key = None):
+    if not svc.backend.capabilities().get("momentsPosting"):
+        raise AppError("native_feature_unavailable", "Moments posting requires macOS", 424)
+    if payload.action == "status":
+        return svc.backend.moment_action(payload.sessionId, payload.action)
+    return svc.once(
+        "/api/moments/action",
+        key,
+        payload.model_dump(),
+        lambda: svc.backend.moment_action(payload.sessionId, payload.action),
+    )
 
 
 @router.post("/messages/send")

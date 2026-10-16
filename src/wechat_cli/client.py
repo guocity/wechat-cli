@@ -12,7 +12,7 @@ from wechat_cli.core.network import NoRedirect
 
 
 class ApiClient:
-    def __init__(self, directory, port=8787, timeout=100):
+    def __init__(self, directory, port=8787, timeout=180):
         self.base = f"http://127.0.0.1:{port}"
         self.token = api_token(directory)
         self.timeout = timeout
@@ -56,4 +56,20 @@ class ApiClient:
     def send(self, chat_id, text, *, idempotency_key):
         return self.request(
             "/api/messages/send", method="POST", data={"chatId": chat_id, "text": text}, key=idempotency_key
+        )
+
+    def compose_moment(self, payload, *, idempotency_key, post=False):
+        return self.request(
+            "/api/moments/post" if post else "/api/moments/compose",
+            method="POST",
+            data=payload,
+            key=idempotency_key,
+        )
+
+    def moment_action(self, session_id, action, *, idempotency_key=None):
+        return self.request(
+            "/api/moments/action",
+            method="POST",
+            data={"sessionId": session_id, "action": action},
+            key=idempotency_key,
         )

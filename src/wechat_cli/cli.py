@@ -76,6 +76,23 @@ def parser():
         "--dry-run", action="store_true", help="Validate native text preparation without sending"
     )
     send.add_argument("--key", help="Reuse this idempotency key for retries (retained for 24 hours)")
+    moment = add("moment", "Open the full native Moments composer (macOS)")
+    moment.add_argument("--text", default="", help="Caption; editable in WeChat before posting")
+    moment_media = moment.add_mutually_exclusive_group(required=True)
+    moment_media.add_argument("--image", type=Path, action="append", help="JPEG/PNG; repeat up to 9 times")
+    moment_media.add_argument("--video", type=Path, help="One video of at most 30 seconds and 64 MiB")
+    moment.add_argument(
+        "--post",
+        action="store_true",
+        help="Submit immediately using the native audience; default opens for review",
+    )
+    moment.add_argument("--key")
+    moment_action = add("moment-action", "Operate a Moments composer opened by this service")
+    moment_action.add_argument("session_id")
+    moment_action.add_argument(
+        "action", choices=["status", "post", "cancel", "emoji", "mention", "visibility", "ai", "add-media"]
+    )
+    moment_action.add_argument("--key")
     for name in ["send-file", "send-voice"]:
         command = add(
             name, "Send a local file" if name == "send-file" else "Send SILK, mono PCM WAV or raw PCM audio"
@@ -110,9 +127,9 @@ def parser():
     return root
 
 
-def upload(path):
-    if path.stat().st_size > 8 * 1024**2:
-        raise AppError("file_too_large", "CLI uploads must be at most 8 MiB", 413)
+def upload(path, maximum=8 * 1024**2):
+    if path.stat().st_size > maximum:
+        raise AppError("file_too_large", f"CLI upload exceeds {maximum // 1024**2} MiB", 413)
     return base64.b64encode(path.read_bytes()).decode()
 
 
@@ -164,7 +181,7 @@ def run(args):
         return client.messages(args.chat_id, args.limit)
     key = getattr(args, "key", None)
     mutation = (
-        command in {"send", "send-file", "send-voice", "transcribe", "download"}
+        command in {"send", "send-file", "send-voice", "transcribe", "download", "moment", "moment-action"}
         or command == "api"
         and args.method == "POST"
     )
@@ -178,6 +195,18 @@ def run(args):
         )
     if command == "send":
         return client.send(args.chat_id, args.text, idempotency_key=key)
+    if command == "moment":
+        files = args.image or [args.video]
+        if len(files) > 9 or sum(path.stat().st_size for path in files) > 64 * 1024**2:
+            raise AppError("invalid_moment_media", "Choose up to 9 images, totaling at most 64 MiB")
+        payload = {
+            "text": args.text,
+            "kind": "images" if args.image else "video",
+            "media": [{"dataBase64": upload(path, (8 if args.image else 64) * 1024**2)} for path in files],
+        }
+        return client.compose_moment(payload, idempotency_key=key, post=args.post)
+    if command == "moment-action":
+        return client.moment_action(args.session_id, args.action, idempotency_key=key)
     if command in {"send-file", "send-voice"}:
         input = {"chatId": args.chat_id, "dataBase64": upload(args.file)}
         if command == "send-file":

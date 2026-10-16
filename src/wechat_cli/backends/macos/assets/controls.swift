@@ -2,6 +2,7 @@ import AppKit
 import Darwin
 import ApplicationServices
 import Foundation
+import AVFoundation
 
 // Operates only the configured WeChat process, through its own native controls.
 // Never grants permissions. Send confirmation is scoped to the selected file dialog.
@@ -50,7 +51,9 @@ func scrollHistoryUp(_ root:AXUIElement,_ pid:Int32) throws {
 }
 func find(_ root: AXUIElement, _ names: [String]) throws -> AXUIElement {
     let matches = elements(root).filter { e in
-        string(e,kAXRoleAttribute) == kAXButtonRole && names.contains { label(e) == $0 || label(e).hasPrefix($0+"(") || label(e).hasPrefix($0+" (") }
+        string(e,kAXRoleAttribute) == kAXButtonRole && names.contains { name in
+            [label(e),string(e,kAXTitleAttribute),string(e,kAXDescriptionAttribute)].contains(name) || label(e).hasPrefix(name+"(") || label(e).hasPrefix(name+" (")
+        }
     }
     guard let first = matches.last else { throw ControlError(code:"native_control_not_found") }; return first
 }
@@ -120,7 +123,149 @@ func sendFile(_ root:AXUIElement,_ pid:Int32,_ path:String,_ name:String) throws
     } catch { if fileSendStarted { throw ControlError(code:"native_send_outcome_unknown") };throw error }
 }
 
+// Moments stays inside the vendor composer. Contact/tag selection, emoji and
+// Xiaowei results remain interactive native UI, with no fabricated account data.
+func momentElements(_ root:AXUIElement) -> [AXUIElement] {
+    guard let focused=attribute(root,kAXFocusedWindowAttribute) else { return elements(root) }
+    var scope=focused as! AXUIElement
+    for _ in 0..<8 {
+        let children=attribute(scope,kAXChildrenAttribute) as? [AXUIElement] ?? []
+        let sheets=children.filter{string($0,kAXRoleAttribute)==kAXSheetRole}
+        guard let next=sheets.last else { break }
+        scope=next
+    }
+    return elements(scope)
+}
+func momentComposer(_ root:AXUIElement) -> AXUIElement? {
+    momentElements(root).reversed().first { e in
+        [kAXSheetRole,kAXWindowRole].contains(string(e,kAXRoleAttribute)) &&
+        elements(e).contains{string($0,kAXRoleAttribute)==kAXTextAreaRole} &&
+        (try? find(e,["Post","发表"])) != nil && (try? find(e,["Cancel","取消"])) != nil
+    }
+}
+func waitMoment(_ root:AXUIElement) throws -> AXUIElement {
+    let deadline=Date().addingTimeInterval(15)
+    repeat {
+        if let composer=momentComposer(root) { return composer }
+        Thread.sleep(forTimeInterval:0.1)
+    } while Date()<deadline
+    throw ControlError(code:"moment_composer_not_found")
+}
+func momentState(_ root:AXUIElement) -> [String:Any] {
+    guard let composer=momentComposer(root) else {
+        let selecting=momentElements(root).contains{["sp_to_select_contact_list","chat_bot_message_list","open-panel"].contains(string($0,kAXIdentifierAttribute)) || ["All contacts","Just me"].contains(string($0,kAXDescriptionAttribute))}
+        return ["source":"native","status":selecting ? "native_selection" : "closed","completeInWeChat":selecting]
+    }
+    let list=elements(composer)
+    let caption=list.first{string($0,kAXRoleAttribute)==kAXTextAreaRole}
+    return ["source":"native","status":"composing","text":caption.map{string($0,kAXValueAttribute)} ?? "",
+            "nativeReviewRequired":true,"features":["caption","emoji","add-remove-media","ai","mention","visibility","cancel","post"]]
+}
+func momentReady(_ root:AXUIElement) throws {
+    guard momentComposer(root)==nil else { throw ControlError(code:"moment_existing_draft") }
+    guard !elements(root).contains(where:{string($0,kAXRoleAttribute)==kAXSheetRole}) else { throw ControlError(code:"moment_close_native_dialogs") }
+}
+func scrollMoment(_ composer:AXUIElement,_ pid:Int32,_ down:Bool) throws {
+    guard NSWorkspace.shared.frontmostApplication?.processIdentifier==pid,
+          let position=attribute(composer,kAXPositionAttribute),let size=attribute(composer,kAXSizeAttribute),
+          CFGetTypeID(position)==AXValueGetTypeID(),CFGetTypeID(size)==AXValueGetTypeID() else { throw ControlError(code:"native_control_action_failed") }
+    var origin=CGPoint.zero,extent=CGSize.zero
+    guard AXValueGetValue(position as! AXValue,.cgPoint,&origin),AXValueGetValue(size as! AXValue,.cgSize,&extent),extent.width>0,extent.height>0 else { throw ControlError(code:"native_control_action_failed") }
+    let point=CGPoint(x:origin.x+extent.width*0.8,y:origin.y+extent.height*0.6)
+    CGEvent(mouseEventSource:nil,mouseType:.mouseMoved,mouseCursorPosition:point,mouseButton:.left)?.post(tap:.cghidEventTap)
+    Thread.sleep(forTimeInterval:0.05)
+    CGEvent(scrollWheelEvent2Source:nil,units:.pixel,wheelCount:1,wheel1:down ? -2400 : 2400,wheel2:0,wheel3:0)?.post(tap:.cghidEventTap)
+    Thread.sleep(forTimeInterval:0.3)
+}
+func pickMomentFile(_ root:AXUIElement,_ pid:Int32,_ path:String) throws {
+    let deadline=Date().addingTimeInterval(5)
+    var panel:AXUIElement?
+    repeat {
+        panel=momentElements(root).first{string($0,kAXIdentifierAttribute)=="open-panel"}
+        if panel != nil { break };Thread.sleep(forTimeInterval:0.1)
+    } while Date()<deadline
+    guard panel != nil else { throw ControlError(code:"moment_picker_not_open") }
+    try key(pid,5,[.maskCommand,.maskShift])
+    let fieldDeadline=Date().addingTimeInterval(5)
+    var pathField:AXUIElement?
+    repeat {
+        pathField=momentElements(root).first(where:{string($0,kAXIdentifierAttribute)=="PathTextField"})
+        if pathField != nil { break };Thread.sleep(forTimeInterval:0.1)
+    } while Date()<fieldDeadline
+    guard let field=pathField,
+          AXUIElementSetAttributeValue(field,kAXValueAttribute as CFString,path as CFString) == .success else { throw ControlError(code:"moment_picker_path_field_missing") }
+    // Go to Folder resolves its path asynchronously; Return before the matching
+    // suggestion appears can leave the dialog open instead of selecting a file.
+    let resolveDeadline=Date().addingTimeInterval(5)
+    var resolved=false
+    repeat {
+        if let go=momentElements(root).first(where:{string($0,kAXIdentifierAttribute)=="GoToWindow"}) {
+            resolved=elements(go).contains{string($0,kAXIdentifierAttribute)==path}
+        }
+        if resolved { break };Thread.sleep(forTimeInterval:0.1)
+    } while Date()<resolveDeadline
+    guard resolved else { throw ControlError(code:"moment_picker_path_unresolved") }
+    try key(pid,36)
+    let navigateDeadline=Date().addingTimeInterval(5)
+    while momentElements(root).contains(where:{string($0,kAXIdentifierAttribute)=="GoToWindow"}) && Date()<navigateDeadline { Thread.sleep(forTimeInterval:0.1) }
+    guard !momentElements(root).contains(where:{string($0,kAXIdentifierAttribute)=="GoToWindow"}) else { throw ControlError(code:"moment_picker_navigation_pending") }
+    guard let selectedPanel=momentElements(root).first(where:{string($0,kAXIdentifierAttribute)=="open-panel"}) else { throw ControlError(code:"moment_picker_selection_missing") }
+    try press(waitFor(selectedPanel,["Open","打开"]))
+    let closeDeadline=Date().addingTimeInterval(5)
+    while momentElements(root).contains(where:{string($0,kAXIdentifierAttribute)=="open-panel"}) && Date()<closeDeadline { Thread.sleep(forTimeInterval:0.1) }
+    guard !momentElements(root).contains(where:{string($0,kAXIdentifierAttribute)=="open-panel"}) else { throw ControlError(code:"moment_picker_close_pending") }
+}
+func composeMoment(_ root:AXUIElement,_ pid:Int32) throws {
+    try momentReady(root)
+    guard let directory=request["mediaDirectory"] as? String,
+          let count=request["mediaCount"] as? Int,count>=1,count<=9,
+          let kind=request["kind"] as? String,["images","video"].contains(kind),
+          kind != "video" || count==1,
+          let text=request["text"] as? String,text.utf16.count<=8192,!text.contains("\0") else { throw ControlError(code:"invalid_input") }
+    let files=try FileManager.default.contentsOfDirectory(atPath:directory).sorted()
+    guard files.count==count else { throw ControlError(code:"invalid_input") }
+    try press(find(root,["Discover","发现"]))
+    if !momentElements(root).contains(where:{string($0,kAXIdentifierAttribute)=="sns_list"}) {
+        try press(waitFor(root,["Moments","朋友圈"]))
+    }
+    guard momentElements(root).contains(where:{string($0,kAXIdentifierAttribute)=="sns_list"}) else { throw ControlError(code:"moment_timeline_not_found") }
+    try press(waitFor(root,["Post","发表"]))
+    for (index,file) in files.enumerated() {
+        if index>0 {
+            let composer=try waitMoment(root)
+            guard let add=elements(composer).first(where:{["Add Image","添加图片"].contains(string($0,kAXValueAttribute)) || ["Add Image","添加图片"].contains(string($0,kAXTitleAttribute))}) else { throw ControlError(code:"native_control_not_found") }
+            try press(add)
+        }
+        try pickMomentFile(root,pid,directory+"/"+file)
+        _ = try waitMoment(root)
+    }
+    let composer=try waitMoment(root)
+    if kind=="images" {
+        let deadline=Date().addingTimeInterval(5)
+        var loaded=0
+        repeat {
+            loaded=elements(composer).filter{["Image","图片"].contains(string($0,kAXValueAttribute)) || ["Image","图片"].contains(string($0,kAXTitleAttribute))}.count
+            if loaded==count { break };Thread.sleep(forTimeInterval:0.1)
+        } while Date()<deadline
+        guard loaded==count else { throw ControlError(code:"moment_media_count_mismatch") }
+    }
+    guard let caption=elements(composer).first(where:{string($0,kAXRoleAttribute)==kAXTextAreaRole}),
+          string(caption,kAXValueAttribute).isEmpty else { throw ControlError(code:"moment_existing_draft") }
+    if !text.isEmpty {
+        guard AXUIElementSetAttributeValue(caption,kAXValueAttribute as CFString,text as CFString) == .success,
+              string(caption,kAXValueAttribute)==text else { throw ControlError(code:"moment_caption_failed") }
+    }
+}
+
 do {
+    let requestedAction=request["action"] as? String ?? "status"
+    if requestedAction=="moments.inspect" {
+        guard let path=request["filePath"] as? String,path.hasPrefix("/") else { throw ControlError(code:"invalid_input") }
+        let asset=AVURLAsset(url:URL(fileURLWithPath:path))
+        let seconds=CMTimeGetSeconds(asset.duration)
+        guard seconds.isFinite,seconds>0,seconds<=30,!asset.tracks(withMediaType:.video).isEmpty,asset.isPlayable else { throw ControlError(code:"moment_invalid_video") }
+        emit(["durationSeconds":seconds]);exit(0)
+    }
     guard AXIsProcessTrusted() else { throw ControlError(code:"native_accessibility_required") }
     guard let pid = request["pid"] as? Int32, let expected = request["app"] as? String,
           let app = NSRunningApplication(processIdentifier:pid) else { throw ControlError(code:"native_process_identity_mismatch") }
@@ -133,7 +278,7 @@ do {
     guard pathLength>0, URL(fileURLWithPath:actualPath).resolvingSymlinksInPath().path == expectedPath else { throw ControlError(code:"native_process_identity_mismatch") }
     let root = AXUIElementCreateApplication(pid)
     let action = request["action"] as? String ?? "status"
-    if action != "status" && action != "attachment.status" {
+    if !["status","attachment.status","moments.status","moments.ready"].contains(action) {
         _ = NSApplication.shared
         if let window=attribute(root,kAXMainWindowAttribute) { AXUIElementPerformAction(window as! AXUIElement,kAXRaiseAction as CFString) }
         app.activate(options:[.activateIgnoringOtherApps])
@@ -150,6 +295,56 @@ do {
         AXUIElementSetAttributeValue(composer,kAXFocusedAttribute as CFString,kCFBooleanTrue)
     }
     switch action {
+    case "moments.ready":
+        try momentReady(root);emit(["ready":true]);exit(0)
+    case "moments.compose":
+        try composeMoment(root,pid);emit(momentState(root));exit(0)
+    case "moments.status":
+        emit(momentState(root));exit(0)
+    case "moments.cancel", "moments.post", "moments.emoji", "moments.mention", "moments.visibility", "moments.ai", "moments.add-media":
+        guard let composer=momentComposer(root) else { throw ControlError(code:"moment_composer_not_found") }
+        // A selector or assistant must be closed before a final action.
+        guard let focused=attribute(root,kAXFocusedWindowAttribute),
+              elements(focused as! AXUIElement).contains(where:{CFEqual($0,composer)}) || CFEqual(focused,composer) else { throw ControlError(code:"moment_finish_native_selection") }
+        if ["moments.ai","moments.mention","moments.visibility"].contains(action) { try scrollMoment(composer,pid,true) }
+        if ["moments.emoji","moments.add-media"].contains(action) { try scrollMoment(composer,pid,false) }
+        let names:[String]
+        switch action {
+        case "moments.cancel": names=["Cancel","取消"]
+        case "moments.post": names=["Post","发表"]
+        case "moments.emoji": names=["Send Sticker","发送表情"]
+        case "moments.visibility": names=["Visible To","谁可以看"]
+        case "moments.ai": names=["AI 帮写"]
+        case "moments.mention": names=["Mention","提醒谁看"]
+        default: names=["Add Image","添加图片"]
+        }
+        if action=="moments.mention" || action=="moments.add-media" {
+            guard let target=elements(composer).first(where:{ names.contains(string($0,kAXValueAttribute)) || names.contains(string($0,kAXTitleAttribute)) }) else { throw ControlError(code:"native_control_not_found") }
+            try press(target)
+        } else {
+            // Visible To includes the selected audience in its accessible label.
+            if action=="moments.visibility" {
+                guard let target=elements(composer).first(where:{e in string(e,kAXRoleAttribute)==kAXButtonRole && names.contains(where:{name in label(e).hasPrefix(name)})}) else { throw ControlError(code:"native_control_not_found") }
+                try press(target)
+            } else {
+                let button=try find(composer,names)
+                if action=="moments.post" { fileSendStarted=true }
+                try press(button)
+            }
+        }
+        if action=="moments.post" || action=="moments.cancel" {
+            if action=="moments.cancel" {
+                Thread.sleep(forTimeInterval:0.2)
+                if let prompt=elements(root).first(where:{e in string(e,kAXRoleAttribute)==kAXSheetRole && elements(e).contains(where:{string($0,kAXValueAttribute)=="Save this draft?"})}) {
+                    try press(find(prompt,["Discard"]))
+                }
+            }
+            let deadline=Date().addingTimeInterval(5)
+            while momentComposer(root) != nil && Date()<deadline { Thread.sleep(forTimeInterval:0.1) }
+            guard momentComposer(root)==nil else { throw ControlError(code:action=="moments.post" ? "moment_post_outcome_unknown" : "moment_cancel_pending") }
+            emit(["source":"native","status":action=="moments.post" ? "submitted" : "cancelled","submittedToWeChat":action=="moments.post","acknowledgedByServer":false]);exit(0)
+        }
+        emit(["source":"native","status":"native_selection","feature":action,"completeInWeChat":true]);exit(0)
     case "status": break
     case "file.send":
         guard let path=request["filePath"] as? String,let name=request["fileName"] as? String,path.hasPrefix("/"),!name.isEmpty else { throw ControlError(code:"invalid_input") }
@@ -212,7 +407,7 @@ do {
     default: throw ControlError(code:"invalid_native_control")
     }
     // WeChat changes controls asynchronously; observe without synthesizing state.
-    if action != "status" && action != "attachment.status" { Thread.sleep(forTimeInterval:0.15) }
+    if !["status","attachment.status","moments.status","moments.ready"].contains(action) { Thread.sleep(forTimeInterval:0.15) }
     emit(state(root))
 } catch let error as ControlError { emit(["error":error.code,"possibleSend":fileSendStarted]) }
 catch { emit(["error":"native_control_failed"]) }
