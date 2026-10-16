@@ -103,6 +103,22 @@ def test_uncertain_post_cannot_be_retried_under_new_key(tmp_path):
     assert caught.value.code == "moment_session_not_found"
 
 
+def test_closed_native_draft_does_not_block_new_composition(tmp_path):
+    calls = []
+
+    def invoke(action, **extra):
+        calls.append(action)
+        if action == "moments.status":
+            return {"source": "native", "status": "closed"}
+        return {"source": "native", "status": "composing"}
+
+    controls = control_fixture(tmp_path, invoke)
+    controls.moment_session = "closed-session"
+    result = prepare_moment(controls, payload())
+    assert result["sessionId"] != "closed-session"
+    assert calls == ["moments.status", "moments.ready", "moments.compose"]
+
+
 def test_preclick_failure_preserves_session(tmp_path):
     def invoke(action, **extra):
         error = AppError("moment_finish_native_selection", "Finish selecting contacts")
@@ -123,6 +139,16 @@ def test_staging_capacity_is_bounded(tmp_path):
         stage_media(tmp_path, payload())
     assert caught.value.code == "moment_staging_full"
     shutil.rmtree(tmp_path / "outgoing-moments")
+
+
+def test_cancel_releases_staged_media_after_native_confirmation(tmp_path):
+    controls = control_fixture(tmp_path, lambda action, **extra: {"status": "cancelled"})
+    controls.moment_session = "session"
+    controls.moment_folder = stage_media(tmp_path, payload())
+    folder = controls.moment_folder
+    moment_action(controls, "session", "cancel")
+    assert not folder.exists()
+    assert controls.moment_folder is None
 
 
 def test_api_routes_are_idempotent_and_platform_gated(api):
@@ -156,3 +182,29 @@ def test_cli_photo_and_video_options_are_exclusive():
     assert args.post is False
     with pytest.raises(SystemExit):
         parser().parse_args(["moment", "--image", "a.jpg", "--video", "v.mp4"])
+
+
+def test_moments_listing_is_read_only_and_platform_gated(api):
+    _, client, native = api
+    with pytest.raises(AppError) as caught:
+        client.moments()
+    assert caught.value.code == "native_feature_unavailable"
+    native.capabilities = lambda: {"momentsReading": "wechat_native_ui"}
+    limits = []
+    native.moments = lambda limit: limits.append(limit) or {"items": [{"displayText": "Native post"}]}
+    assert client.moments(25)["items"] == [{"displayText": "Native post"}]
+    assert limits == [25]
+    for limit in [0, 1001, "bad"]:
+        with pytest.raises(AppError):
+            client.moments(limit)
+    assert limits == [25]
+
+
+def test_cli_moments_all_and_limit():
+    from wechat_cli.cli import parser
+
+    args = parser().parse_args(["moments", "--all"])
+    assert args.all is True
+    assert parser().parse_args(["moments", "--limit", "50"]).limit == 50
+    with pytest.raises(SystemExit):
+        parser().parse_args(["moments", "--limit", "1001"])

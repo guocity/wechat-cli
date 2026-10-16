@@ -1,7 +1,11 @@
 """macOS adapter: normalize native results and hide RPC/UI details from shared code."""
 
+import hashlib
+import json
 import os
 import sys
+import threading
+import time
 from pathlib import Path
 
 from wechat_cli.core.models import receipt, resolve_chat, resolve_message
@@ -23,6 +27,7 @@ class MacOSBackend:
         self.transport = None
         self.observed = {"connected": False}
         self.executable = None
+        self.channels_lock = threading.Lock()
 
     def connect(self):
         runtime = ensure_current(self.directory)
@@ -42,6 +47,20 @@ class MacOSBackend:
             from wechat_cli.core.errors import AppError
 
             raise AppError("wechat_closed", "WeChat closed during startup", 503)
+        self.auto_login()
+
+    def auto_login(self):
+        if self.status().get("accountAvailable"):
+            return
+        result = self.controls.invoke("login.saved")
+        if not result.get("loginStarted"):
+            return
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            if self.status().get("accountAvailable"):
+                return
+            time.sleep(0.25)
+        # Keep the service available for QR/phone confirmation when required.
 
     def is_alive(self):
         return bool(
@@ -110,6 +129,56 @@ class MacOSBackend:
     def voice_data(self, chat_id, identifier):
         return self._request("voiceData", {"chatId": chat_id, "id": identifier})
 
+    def channels_video(self, message):
+        from wechat_cli.core.config import private_directory, save_json
+        from wechat_cli.core.errors import AppError
+        from wechat_cli.core.media import channels_filename, complete_mp4, read_channels
+        from wechat_cli.core.models import channels_descriptor
+
+        from .channels import recover
+        from .setup import load_runtime
+
+        descriptor = channels_descriptor(message)
+        filename = channels_filename(None, descriptor.get("objectId") or message["id"])
+        identity = self.self_id()
+        if not identity:
+            raise AppError("native_account_not_ready", "No active WeChat account", 409)
+        digest = hashlib.sha256(
+            (identity + "\0" + message["id"] + "\0" + message.get("content", "")).encode()
+        ).hexdigest()
+        with self.channels_lock:
+            directory = private_directory(self.directory / "channels-cache")
+            cached = directory / (digest + ".mp4")
+            if cached.is_file() and 0 < cached.stat().st_size <= 128 * 1024**2:
+                data = cached.read_bytes()
+                if complete_mp4(data):
+                    try:
+                        filename = channels_filename(
+                            json.loads(cached.with_suffix(".json").read_text())["filename"], filename
+                        )
+                    except (OSError, ValueError, KeyError, TypeError):
+                        pass
+                    return data, "video/mp4", filename
+            try:
+                data, mime, name = read_channels(message, "full")
+            except AppError as error:
+                if error.code not in {"channels_video_unavailable", "channels_media_unavailable"}:
+                    raise
+                if not descriptor.get("url"):
+                    raise
+                data, name = recover(load_runtime(self.directory)["app"], descriptor["url"])
+                mime = "video/mp4"
+            temporary = cached.with_suffix(".tmp")
+            fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            try:
+                with os.fdopen(fd, "wb") as output:
+                    output.write(data)
+                os.replace(temporary, cached)
+                save_json(cached.with_suffix(".json"), {"filename": name or filename})
+            finally:
+                temporary.unlink(missing_ok=True)
+            return data, mime, name or filename
+
     def cached_media(self, value):
         return self._request("cachedMedia", {"hash": value})
 
@@ -132,6 +201,16 @@ class MacOSBackend:
         from .moments import post_moment
 
         return post_moment(self.controls, payload)
+
+    def moments(self, limit=20):
+        from wechat_cli.core.errors import AppError
+
+        if not self.controls.lock.acquire(blocking=False):
+            raise AppError("native_control_busy", "Another control action is running", 409)
+        try:
+            return self.controls.invoke("moments.list", limit=limit)
+        finally:
+            self.controls.lock.release()
 
     def compose_moment(self, payload):
         from .moments import prepare_moment
@@ -159,6 +238,7 @@ class MacOSBackend:
             "fileSending": "wechat_native_ui",
             "voiceSending": "wechat_native_queue",
             "momentsPosting": "wechat_native_ui",
+            "momentsReading": "wechat_native_ui",
         }
 
 

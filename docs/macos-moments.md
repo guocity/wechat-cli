@@ -1,5 +1,26 @@
 # macOS Moments validation
 
+## Local validation, 2026-10-16 (0.2.3)
+
+- Added `wechat-cli moments --limit N`, `moments --all`, Python
+  `ApiClient.moments()` and `GET /api/moments?limit=N`.
+- Read ten real native feed posts across multiple viewports. Results preserve
+  native display text and report their history/ID limitations and stop reason.
+- Verified video composition with `scifi_30s.mp4` and the exact Unicode caption,
+  then cancelled through the CLI without publishing. Confirmed cancellation
+  releases that session's staged upload.
+- Startup uses LaunchServices, selects the remembered account when offered,
+  and waits for native account readiness. Existing sessions are reused.
+- Native controls recover orphaned media pickers and stale draft session handles,
+  search for existing composers across windows, and wait for picker creation.
+- 172 automated tests passed, 2 existing skips; Ruff passed; Swift compiled
+  with existing SDK deprecation warnings.
+
+`--all` reads the feed WeChat makes reachable, bounded by 1000 posts/two minutes.
+This is not an account archive: stable post IDs, full media and authoritative
+history completeness are not available from Accessibility. Identical display
+text can be deduplicated. Final publication remains untested.
+
 Validated against Apple Silicon WeChat 4.1.15, bundle build 270135. The smoke
 harness used the real Swift Accessibility helper and signed-in vendor GUI, with
 fixture account metadata for the local HTTP service. It did not exercise Frida

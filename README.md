@@ -10,8 +10,22 @@ After publication to PyPI:
 uvx wechat-cli setup
 uvx wechat-cli start
 uvx wechat-cli chats
+uvx wechat-cli moments --limit 20
+uvx wechat-cli moments --all
 uvx wechat-cli web
 ```
+
+On macOS, startup automatically opens the remembered account when WeChat offers
+“Open WeChat”, then waits for the native account to become available. If WeChat
+requires a QR scan or phone confirmation, complete that in WeChat. Existing signed-in
+sessions are reused.
+
+`moments` reads the macOS native feed and returns `items[].displayText`.
+`--all` scrolls the feed until no further posts are observed, up to 1000 posts
+or two minutes. The JSON reports `stopReason` and `complete: false`: WeChat
+controls the visible history, and its Accessibility view does not expose stable
+post IDs, full media, or a complete account archive. The read-only HTTP endpoint
+is `GET /api/moments?limit=20` (1–1000); no idempotency key is needed.
 
 Dependency selection uses standard Python environment markers during installation. Both platforms install FastAPI, Uvicorn, OS TLS trust and Frida. macOS additionally installs Cryptography, Pillow and the SILK codec. Windows omits those media packages; Python 3.11–3.13 adds Zstandard, while Python 3.14+ uses the standard library. Runtime imports of macOS media libraries are lazy, so Windows can start its server without them. Developer test dependencies are separate and are not installed by `uvx`.
 
@@ -263,3 +277,9 @@ uv publish dist/wechat_cli-0.2.2-py3-none-any.whl dist/wechat_cli-0.2.2.tar.gz
 ```
 
 The distribution name and console entry point are both **`wechat-cli`**; the import name is `wechat_cli`. Name availability is not a reservation. Publication is a separate step and is not performed by setup or the test suite. The Python server is independent of the existing `wechat-node` implementation.
+
+Channels cards shared in chats display covers automatically, with **Play video**
+and **Download MP4** controls. On macOS, the approved research build can recover
+video directly from WeChat after the card has been opened there once, then cache
+the validated MP4 privately for later playback/downloads. No extra backend or
+proxy is needed. See [setup, usage and current limits](docs/channels-playback.md).

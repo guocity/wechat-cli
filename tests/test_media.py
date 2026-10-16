@@ -82,3 +82,52 @@ def test_silk_frame_validation_and_voice_preparation():
     for data in [b"not silk", silk[:-1], b"#!SILK_V3\x01\x00a", silk + b"\x02\x00x"]:
         with pytest.raises(AppError):
             silk_duration(data)
+
+
+def channel_message(url="https://finder.video.qq.com/video", cover="https://finder.video.qq.com/cover"):
+    from wechat_cli.core.models import resolve_message
+
+    return resolve_message(
+        {
+            "id": "42",
+            "type": 49,
+            "content": f"""<msg><appmsg><type>51</type>
+      <finderFeed><objectId>123</objectId><mediaList><media><mediaType>4</mediaType>
+      <url>{url}</url><coverUrl>{cover}</coverUrl></media></mediaList></finderFeed></appmsg></msg>""",
+        }
+    )
+
+
+def test_channels_video_and_cover_are_separate(monkeypatch):
+    from wechat_cli.core import media
+
+    mp4 = b"\x00\x00\x00\x10ftypisom\x00\x00\x00\x00" + b"\x00\x00\x00\x08moov\x00\x00\x00\x08mdat"
+    calls = []
+
+    def download(url, **kwargs):
+        calls.append(url)
+        return (mp4, "../../original.mp4") if url.endswith("/video") else (b"GIF89a" + bytes(42), None)
+
+    monkeypatch.setattr(media, "download_media", download)
+    assert media.read_channels(channel_message(), "full") == (mp4, "video/mp4", "original.mp4")
+    assert media.read_channels(channel_message(), "preview")[1] == "image/gif"
+    assert calls == ["https://finder.video.qq.com/video", "https://finder.video.qq.com/cover"]
+
+
+def test_channels_rejects_encrypted_or_truncated_video(monkeypatch):
+    from wechat_cli.core import media
+
+    for data in [b"GIF89aimage", b"encrypted", b"\x00\x00\x00\x40ftypisom"]:
+        monkeypatch.setattr(media, "download_media", lambda *a, **kw: (data, None))
+        with pytest.raises(AppError, match="encrypted or incomplete"):
+            media.read_channels(channel_message(), "full")
+
+
+def test_channels_requires_video_media_and_safe_filename():
+    from wechat_cli.core.media import channels_filename, read_channels
+
+    with pytest.raises(AppError, match="no downloadable"):
+        read_channels(channel_message(url=""), "full")
+    assert channels_filename(None, "123") == "channels-123.mp4"
+    assert channels_filename("C:\\private\\clip.mp4", "123") == "clip.mp4"
+    assert channels_filename("x\r\n.mp4", "123") == "x__.mp4"

@@ -79,7 +79,11 @@ def prepare_moment(controls, payload):
     invoked = False
     try:
         if controls.moment_session:
-            raise AppError("moment_composer_busy", "Finish or cancel the active Moments composer", 409)
+            if controls.invoke("moments.status").get("status") == "closed":
+                # The user may have closed or posted the draft in WeChat itself.
+                controls.moment_session = None
+            else:
+                raise AppError("moment_composer_busy", "Finish or cancel the active Moments composer", 409)
         # Check before expiring old staged media: a draft surviving a service
         # restart may still reference those files.
         controls.invoke("moments.ready")
@@ -97,6 +101,7 @@ def prepare_moment(controls, payload):
         if result.get("status") != "composing" or result.get("source") != "native":
             raise AppError("native_invalid_response", "The native Moments composer was not verified", 502)
         controls.moment_session = str(uuid.uuid4())
+        controls.moment_folder = folder
         return {**result, "sessionId": controls.moment_session, "acknowledgedByServer": False}
     finally:
         # WeChat can read staged media asynchronously. Keep it for an hour once opened.
@@ -124,6 +129,11 @@ def moment_action(controls, session_id, action):
             raise
         if action == "cancel" or result.get("status") == "closed":
             controls.moment_session = None
+        if action == "cancel" and result.get("status") == "cancelled":
+            folder = getattr(controls, "moment_folder", None)
+            if folder:
+                shutil.rmtree(folder, ignore_errors=True)
+                controls.moment_folder = None
         return {**result, "sessionId": session_id, "acknowledgedByServer": False}
     finally:
         controls.lock.release()

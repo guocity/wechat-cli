@@ -1,0 +1,76 @@
+{
+  "status": "user_approved_applied_verified_playback_and_download",
+  "researchCopy": "/Users/m4air/Library/Application Support/wechat-cli/apps/WeChatChannelsResearch.app",
+  "changes": [
+    {
+      "bundle": "Contents/MacOS/WeChatAppEx.app/Contents/Frameworks/WeChatAppEx Framework.framework/Versions/C/Helpers/WeApp.app",
+      "currentEntitlements": {
+        "com.apple.security.app-sandbox": true,
+        "com.apple.security.cs.allow-jit": true,
+        "com.apple.security.inherit": true
+      },
+      "proposedAdditions": {
+        "com.apple.security.cs.disable-library-validation": true
+      }
+    },
+    {
+      "bundle": "Contents/MacOS/WeChatAppEx.app/Contents/Frameworks/WeChatAppEx Framework.framework/Versions/C/Helpers/WeChatAppEx Helper (GPU).app",
+      "currentEntitlements": {
+        "com.apple.security.app-sandbox": true,
+        "com.apple.security.inherit": true
+      },
+      "proposedAdditions": {
+        "com.apple.security.cs.disable-library-validation": true
+      }
+    },
+    {
+      "bundle": "Contents/MacOS/WeChatAppEx.app/Contents/Frameworks/WeChatAppEx Framework.framework/Versions/C/Helpers/WeChatAppEx Helper (Plugin).app",
+      "currentEntitlements": {
+        "com.apple.security.app-sandbox": true,
+        "com.apple.security.inherit": true
+      },
+      "proposedAdditions": {
+        "com.apple.security.cs.disable-library-validation": true
+      }
+    },
+    {
+      "bundle": "Contents/MacOS/WeChatAppEx.app/Contents/Frameworks/WeChatAppEx Framework.framework/Versions/C/Helpers/WeChatAppEx Helper (Renderer).app",
+      "currentEntitlements": {
+        "com.apple.security.app-sandbox": true,
+        "com.apple.security.cs.allow-jit": true,
+        "com.apple.security.get-task-allow": true,
+        "com.apple.security.inherit": true
+      },
+      "proposedAdditions": {
+        "com.apple.security.cs.disable-library-validation": true
+      }
+    },
+    {
+      "bundle": "Contents/MacOS/WeChatAppEx.app/Contents/Frameworks/WeChatAppEx Framework.framework/Versions/C/Helpers/WeChatAppEx Helper.app",
+      "currentEntitlements": {
+        "com.apple.security.app-sandbox": true,
+        "com.apple.security.inherit": true
+      },
+      "proposedAdditions": {
+        "com.apple.security.cs.disable-library-validation": true
+      }
+    },
+    {
+      "bundle": "Contents/MacOS/WeChatAppEx.app",
+      "currentEntitlements": {
+        "com.apple.security.app-sandbox": true,
+        "com.apple.security.cs.allow-jit": true,
+        "com.apple.security.inherit": true
+      },
+      "proposedAdditions": {
+        "com.apple.security.cs.disable-library-validation": true
+      }
+    }
+  ],
+  "instrumentation": {
+    "mode": "signed_gadget",
+    "code_signing": "required",
+    "readOnly": true,
+    "loopbackAuthenticated": true
+  }
+}

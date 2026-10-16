@@ -23,18 +23,31 @@ func elements(_ root: AXUIElement) -> [AXUIElement] {
     return output
 }
 func label(_ e: AXUIElement) -> String { [kAXTitleAttribute,kAXDescriptionAttribute,kAXHelpAttribute].map{string(e,$0)}.filter{!$0.isEmpty}.joined(separator:" ") }
-func press(_ e: AXUIElement) throws {
+func press(_ e: AXUIElement, targeted:Bool=false) throws {
     if let enabled = attribute(e,kAXEnabledAttribute) as? Bool, !enabled { throw ControlError(code:"native_control_disabled") }
     var pid:pid_t=0;guard AXUIElementGetPid(e,&pid) == .success else { throw ControlError(code:"native_control_action_failed") }
     guard let position=attribute(e,kAXPositionAttribute),let size=attribute(e,kAXSizeAttribute),CFGetTypeID(position)==AXValueGetTypeID(),CFGetTypeID(size)==AXValueGetTypeID() else { throw ControlError(code:"native_control_action_failed") }
     var origin=CGPoint.zero,extent=CGSize.zero
     guard AXValueGetValue(position as! AXValue,.cgPoint,&origin),AXValueGetValue(size as! AXValue,.cgSize,&extent),extent.width>0,extent.height>0 else { throw ControlError(code:"native_control_action_failed") }
     let point=CGPoint(x:origin.x+extent.width/2,y:origin.y+extent.height/2)
-    guard let down=CGEvent(mouseEventSource:nil,mouseType:.leftMouseDown,mouseCursorPosition:point,mouseButton:.left),let up=CGEvent(mouseEventSource:nil,mouseType:.leftMouseUp,mouseCursorPosition:point,mouseButton:.left) else { throw ControlError(code:"native_control_action_failed") }
+    let mouseSource=CGEventSource(stateID:.combinedSessionState)
+    mouseSource?.localEventsSuppressionInterval=0
+    guard let down=CGEvent(mouseEventSource:mouseSource,mouseType:.leftMouseDown,mouseCursorPosition:point,mouseButton:.left),let up=CGEvent(mouseEventSource:mouseSource,mouseType:.leftMouseUp,mouseCursorPosition:point,mouseButton:.left) else { throw ControlError(code:"native_control_action_failed") }
+    down.setIntegerValueField(.mouseEventClickState,value:1)
+    up.setIntegerValueField(.mouseEventClickState,value:1)
+    down.setDoubleValueField(.mouseEventPressure,value:1)
+    up.setDoubleValueField(.mouseEventPressure,value:0)
+    down.flags=[];up.flags=[]
     guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { throw ControlError(code:"native_app_not_frontmost") }
+    CGWarpMouseCursorPosition(point)
     CGEvent(mouseEventSource:nil,mouseType:.mouseMoved,mouseCursorPosition:point,mouseButton:.left)?.post(tap:.cghidEventTap)
     Thread.sleep(forTimeInterval:0.08)
-    down.post(tap:.cghidEventTap);Thread.sleep(forTimeInterval:0.05);up.post(tap:.cghidEventTap)
+    if targeted {
+        down.postToPid(pid);Thread.sleep(forTimeInterval:0.05);up.postToPid(pid)
+    } else {
+        down.post(tap:.cghidEventTap);Thread.sleep(forTimeInterval:0.1);up.post(tap:.cghidEventTap)
+    }
+    RunLoop.current.run(until:Date().addingTimeInterval(0.2))
 }
 func scrollHistoryUp(_ root:AXUIElement,_ pid:Int32) throws {
     guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
@@ -52,7 +65,7 @@ func scrollHistoryUp(_ root:AXUIElement,_ pid:Int32) throws {
 func find(_ root: AXUIElement, _ names: [String]) throws -> AXUIElement {
     let matches = elements(root).filter { e in
         string(e,kAXRoleAttribute) == kAXButtonRole && names.contains { name in
-            [label(e),string(e,kAXTitleAttribute),string(e,kAXDescriptionAttribute)].contains(name) || label(e).hasPrefix(name+"(") || label(e).hasPrefix(name+" (")
+            [label(e),string(e,kAXTitleAttribute),string(e,kAXDescriptionAttribute),string(e,kAXHelpAttribute),string(e,kAXValueAttribute)].contains(name) || label(e).hasPrefix(name+"(") || label(e).hasPrefix(name+" ") || elements(e).dropFirst().contains { string($0,kAXRoleAttribute)==kAXStaticTextRole && string($0,kAXValueAttribute)==name }
         }
     }
     guard let first = matches.last else { throw ControlError(code:"native_control_not_found") }; return first
@@ -137,7 +150,9 @@ func momentElements(_ root:AXUIElement) -> [AXUIElement] {
     return elements(scope)
 }
 func momentComposer(_ root:AXUIElement) -> AXUIElement? {
-    momentElements(root).reversed().first { e in
+    // A floating Moments window can lose focus between CLI invocations.
+    // Search all this process's windows, including sheets under their parents.
+    elements(root).reversed().first { e in
         [kAXSheetRole,kAXWindowRole].contains(string(e,kAXRoleAttribute)) &&
         elements(e).contains{string($0,kAXRoleAttribute)==kAXTextAreaRole} &&
         (try? find(e,["Post","发表"])) != nil && (try? find(e,["Cancel","取消"])) != nil
@@ -163,6 +178,12 @@ func momentState(_ root:AXUIElement) -> [String:Any] {
 }
 func momentReady(_ root:AXUIElement) throws {
     guard momentComposer(root)==nil else { throw ControlError(code:"moment_existing_draft") }
+    // Recover an orphaned media picker left by an interrupted composition.
+    if let panel=elements(root).first(where:{string($0,kAXIdentifierAttribute)=="open-panel"}) {
+        try press(find(panel,["Cancel","取消"]))
+        let deadline=Date().addingTimeInterval(5)
+        while elements(root).contains(where:{string($0,kAXIdentifierAttribute)=="open-panel"}) && Date()<deadline { Thread.sleep(forTimeInterval:0.1) }
+    }
     guard !elements(root).contains(where:{string($0,kAXRoleAttribute)==kAXSheetRole}) else { throw ControlError(code:"moment_close_native_dialogs") }
 }
 func scrollMoment(_ composer:AXUIElement,_ pid:Int32,_ down:Bool) throws {
@@ -178,10 +199,10 @@ func scrollMoment(_ composer:AXUIElement,_ pid:Int32,_ down:Bool) throws {
     Thread.sleep(forTimeInterval:0.3)
 }
 func pickMomentFile(_ root:AXUIElement,_ pid:Int32,_ path:String) throws {
-    let deadline=Date().addingTimeInterval(5)
+    let deadline=Date().addingTimeInterval(30)
     var panel:AXUIElement?
     repeat {
-        panel=momentElements(root).first{string($0,kAXIdentifierAttribute)=="open-panel"}
+        panel=elements(root).first{string($0,kAXIdentifierAttribute)=="open-panel"}
         if panel != nil { break };Thread.sleep(forTimeInterval:0.1)
     } while Date()<deadline
     guard panel != nil else { throw ControlError(code:"moment_picker_not_open") }
@@ -189,7 +210,7 @@ func pickMomentFile(_ root:AXUIElement,_ pid:Int32,_ path:String) throws {
     let fieldDeadline=Date().addingTimeInterval(5)
     var pathField:AXUIElement?
     repeat {
-        pathField=momentElements(root).first(where:{string($0,kAXIdentifierAttribute)=="PathTextField"})
+        pathField=elements(root).first(where:{string($0,kAXIdentifierAttribute)=="PathTextField"})
         if pathField != nil { break };Thread.sleep(forTimeInterval:0.1)
     } while Date()<fieldDeadline
     guard let field=pathField,
@@ -199,7 +220,7 @@ func pickMomentFile(_ root:AXUIElement,_ pid:Int32,_ path:String) throws {
     let resolveDeadline=Date().addingTimeInterval(5)
     var resolved=false
     repeat {
-        if let go=momentElements(root).first(where:{string($0,kAXIdentifierAttribute)=="GoToWindow"}) {
+        if let go=elements(root).first(where:{string($0,kAXIdentifierAttribute)=="GoToWindow"}) {
             resolved=elements(go).contains{string($0,kAXIdentifierAttribute)==path}
         }
         if resolved { break };Thread.sleep(forTimeInterval:0.1)
@@ -207,13 +228,85 @@ func pickMomentFile(_ root:AXUIElement,_ pid:Int32,_ path:String) throws {
     guard resolved else { throw ControlError(code:"moment_picker_path_unresolved") }
     try key(pid,36)
     let navigateDeadline=Date().addingTimeInterval(5)
-    while momentElements(root).contains(where:{string($0,kAXIdentifierAttribute)=="GoToWindow"}) && Date()<navigateDeadline { Thread.sleep(forTimeInterval:0.1) }
-    guard !momentElements(root).contains(where:{string($0,kAXIdentifierAttribute)=="GoToWindow"}) else { throw ControlError(code:"moment_picker_navigation_pending") }
-    guard let selectedPanel=momentElements(root).first(where:{string($0,kAXIdentifierAttribute)=="open-panel"}) else { throw ControlError(code:"moment_picker_selection_missing") }
+    while elements(root).contains(where:{string($0,kAXIdentifierAttribute)=="GoToWindow"}) && Date()<navigateDeadline { Thread.sleep(forTimeInterval:0.1) }
+    guard !elements(root).contains(where:{string($0,kAXIdentifierAttribute)=="GoToWindow"}) else { throw ControlError(code:"moment_picker_navigation_pending") }
+    guard let selectedPanel=elements(root).first(where:{string($0,kAXIdentifierAttribute)=="open-panel"}) else { throw ControlError(code:"moment_picker_selection_missing") }
     try press(waitFor(selectedPanel,["Open","打开"]))
     let closeDeadline=Date().addingTimeInterval(5)
-    while momentElements(root).contains(where:{string($0,kAXIdentifierAttribute)=="open-panel"}) && Date()<closeDeadline { Thread.sleep(forTimeInterval:0.1) }
-    guard !momentElements(root).contains(where:{string($0,kAXIdentifierAttribute)=="open-panel"}) else { throw ControlError(code:"moment_picker_close_pending") }
+    while elements(root).contains(where:{string($0,kAXIdentifierAttribute)=="open-panel"}) && Date()<closeDeadline { Thread.sleep(forTimeInterval:0.1) }
+    guard !elements(root).contains(where:{string($0,kAXIdentifierAttribute)=="open-panel"}) else { throw ControlError(code:"moment_picker_close_pending") }
+}
+func openMomentTimeline(_ root:AXUIElement,_ pid:Int32) throws -> AXUIElement {
+    if let list=elements(root).first(where:{string($0,kAXIdentifierAttribute)=="sns_list"}) { return list }
+    guard let discover=try? find(root,["Discover","发现"]) else { throw ControlError(code:"moment_discover_not_found") }
+    // WeChat's sidebar exposes Raise as its native activation action.
+    // Verify navigation before falling back to a pointer click.
+    AXUIElementPerformAction(discover,kAXRaiseAction as CFString)
+    AXUIElementPerformAction(discover,kAXPressAction as CFString)
+    RunLoop.current.run(until:Date().addingTimeInterval(0.3))
+    try press(discover)
+    if !momentElements(root).contains(where:{string($0,kAXIdentifierAttribute)=="sns_list"}),
+       (try? waitFor(root,["Moments","朋友圈"],1)) == nil {
+        AXUIElementPerformAction(discover,kAXPressAction as CFString)
+        try press(discover,targeted:true)
+        if (try? waitFor(root,["Moments","朋友圈"],1)) == nil {
+            if AXUIElementSetAttributeValue(discover,kAXFocusedAttribute as CFString,kCFBooleanTrue) == .success,
+               attribute(discover,kAXFocusedAttribute) as? Bool == true { try key(pid,36) }
+        }
+    }
+    if !momentElements(root).contains(where:{string($0,kAXIdentifierAttribute)=="sns_list"}) {
+        guard let entry=try? waitFor(root,["Moments","朋友圈"],10) else { throw ControlError(code:"moment_entry_not_found") }
+        try press(entry)
+    }
+    let timelineDeadline=Date().addingTimeInterval(10)
+    while !momentElements(root).contains(where:{string($0,kAXIdentifierAttribute)=="sns_list"}) && Date()<timelineDeadline { Thread.sleep(forTimeInterval:0.1) }
+    guard momentElements(root).contains(where:{string($0,kAXIdentifierAttribute)=="sns_list"}) else { throw ControlError(code:"moment_timeline_not_found") }
+    guard let list=elements(root).first(where:{string($0,kAXIdentifierAttribute)=="sns_list"}) else { throw ControlError(code:"moment_timeline_not_found") }
+    return list
+}
+func momentRows(_ list:AXUIElement) -> [String] {
+    let children=attribute(list,kAXChildrenAttribute) as? [AXUIElement] ?? []
+    return children.compactMap { item in
+        guard string(item,kAXRoleAttribute)==kAXStaticTextRole else { return nil }
+        let value=string(item,kAXValueAttribute)
+        let text=(value.isEmpty ? label(item) : value).trimmingCharacters(in:.whitespacesAndNewlines)
+        guard !text.isEmpty, !["Comments","评论","赞","Like"].contains(text),
+              text.range(of:"^余下[0-9]+条$",options:.regularExpression)==nil else { return nil }
+        return text
+    }
+}
+func listMoments(_ root:AXUIElement,_ pid:Int32) throws -> [String:Any] {
+    guard let limit=request["limit"] as? Int,limit>=1,limit<=1000 else { throw ControlError(code:"invalid_input") }
+    guard momentComposer(root)==nil, !elements(root).contains(where:{string($0,kAXRoleAttribute)==kAXSheetRole}) else { throw ControlError(code:"moment_existing_draft") }
+    let list=try openMomentTimeline(root,pid)
+    let deadline=Date().addingTimeInterval(120)
+    // Restore the newest part of the feed before collecting successive viewports.
+    var previous:[String]=[]
+    for _ in 0..<30 {
+        let rows=momentRows(list)
+        if !rows.isEmpty && rows==previous { break }
+        previous=rows
+        try scrollMoment(list,pid,false)
+    }
+    var items:[[String:Any]]=[], seen=Set<String>(), stalled=0, reason="time_limit"
+    while Date()<deadline {
+        var added=0
+        for text in momentRows(list) {
+            let fingerprint=text.replacingOccurrences(of:"[0-9]+ (?:second|minute|hour)\\(s\\) ago|[0-9]+(?:秒|分钟|小时)前",with:"",options:.regularExpression)
+            if seen.insert(fingerprint).inserted {
+                items.append(["displayText":text]);added+=1
+                if items.count>=limit { break }
+            }
+        }
+        if items.count>=limit { reason="limit";break }
+        stalled = added==0 ? stalled+1 : 0
+        if stalled>=6 { reason="no_more_observed";break }
+        try scrollMoment(list,pid,true)
+        RunLoop.current.run(until:Date().addingTimeInterval(0.4))
+    }
+    return ["source":"native","items":items,"total":items.count,"order":"newest_first",
+            "scope":"accessible_moments_feed","complete":false,"stopReason":reason,
+            "limitations":["WeChat controls feed visibility and history; this is not a complete account archive.","Native post IDs and full media are not exposed by this view."]]
 }
 func composeMoment(_ root:AXUIElement,_ pid:Int32) throws {
     try momentReady(root)
@@ -224,12 +317,12 @@ func composeMoment(_ root:AXUIElement,_ pid:Int32) throws {
           let text=request["text"] as? String,text.utf16.count<=8192,!text.contains("\0") else { throw ControlError(code:"invalid_input") }
     let files=try FileManager.default.contentsOfDirectory(atPath:directory).sorted()
     guard files.count==count else { throw ControlError(code:"invalid_input") }
-    try press(find(root,["Discover","发现"]))
-    if !momentElements(root).contains(where:{string($0,kAXIdentifierAttribute)=="sns_list"}) {
-        try press(waitFor(root,["Moments","朋友圈"]))
-    }
-    guard momentElements(root).contains(where:{string($0,kAXIdentifierAttribute)=="sns_list"}) else { throw ControlError(code:"moment_timeline_not_found") }
-    try press(waitFor(root,["Post","发表"]))
+    _ = try openMomentTimeline(root,pid)
+    guard let post=try? waitFor(root,["Post","发表"],10) else { throw ControlError(code:"moment_post_button_not_found") }
+    AXUIElementPerformAction(post,kAXRaiseAction as CFString)
+    let pickerDeadline=Date().addingTimeInterval(3)
+    while !elements(root).contains(where:{string($0,kAXIdentifierAttribute)=="open-panel"}) && Date()<pickerDeadline { RunLoop.current.run(until:Date().addingTimeInterval(0.1)) }
+    if !elements(root).contains(where:{string($0,kAXIdentifierAttribute)=="open-panel"}) { try press(post) }
     for (index,file) in files.enumerated() {
         if index>0 {
             let composer=try waitMoment(root)
@@ -267,8 +360,15 @@ do {
         emit(["durationSeconds":seconds]);exit(0)
     }
     guard AXIsProcessTrusted() else { throw ControlError(code:"native_accessibility_required") }
-    guard let pid = request["pid"] as? Int32, let expected = request["app"] as? String,
-          let app = NSRunningApplication(processIdentifier:pid) else { throw ControlError(code:"native_process_identity_mismatch") }
+    guard let pid = request["pid"] as? Int32, let expected = request["app"] as? String else { throw ControlError(code:"native_process_identity_mismatch") }
+    // Gadget resumes before LaunchServices necessarily registers the GUI app.
+    let registrationDeadline=Date().addingTimeInterval(5)
+    var running=NSRunningApplication(processIdentifier:pid)
+    while running == nil && Date()<registrationDeadline {
+        Thread.sleep(forTimeInterval:0.1)
+        running=NSRunningApplication(processIdentifier:pid)
+    }
+    guard let app=running else { throw ControlError(code:"native_process_identity_mismatch") }
     // LaunchServices can report another copy's bundle URL when both share WeChat's bundle ID.
     // Verify the actual process executable instead, resolving /tmp aliases on both sides.
     var pathBuffer=[CChar](repeating:0,count:4096)
@@ -278,10 +378,18 @@ do {
     guard pathLength>0, URL(fileURLWithPath:actualPath).resolvingSymlinksInPath().path == expectedPath else { throw ControlError(code:"native_process_identity_mismatch") }
     let root = AXUIElementCreateApplication(pid)
     let action = request["action"] as? String ?? "status"
-    if !["status","attachment.status","moments.status","moments.ready"].contains(action) {
+    if !["status","attachment.status","moments.status"].contains(action) {
         _ = NSApplication.shared
         if let window=attribute(root,kAXMainWindowAttribute) { AXUIElementPerformAction(window as! AXUIElement,kAXRaiseAction as CFString) }
-        app.activate(options:[.activateIgnoringOtherApps])
+        app.unhide()
+        app.activate(options:[.activateIgnoringOtherApps,.activateAllWindows])
+        for window in attribute(root,kAXWindowsAttribute) as? [AXUIElement] ?? [] {
+            if string(window,kAXTitleAttribute)=="WeChat" {
+                AXUIElementSetAttributeValue(window,kAXMinimizedAttribute as CFString,kCFBooleanFalse)
+                AXUIElementPerformAction(window,kAXRaiseAction as CFString)
+            }
+        }
+        RunLoop.current.run(until:Date().addingTimeInterval(0.3))
         let deadline=Date().addingTimeInterval(3)
         while NSWorkspace.shared.frontmostApplication?.processIdentifier != pid && Date()<deadline { RunLoop.current.run(until:Date().addingTimeInterval(0.1)) }
         guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { throw ControlError(code:"native_app_not_frontmost") }
@@ -295,6 +403,21 @@ do {
         AXUIElementSetAttributeValue(composer,kAXFocusedAttribute as CFString,kCFBooleanTrue)
     }
     switch action {
+    case "moments.list":
+        emit(try listMoments(root,pid));exit(0)
+    case "login.saved":
+        let deadline=Date().addingTimeInterval(10)
+        repeat {
+            let list=elements(root)
+            if list.contains(where:{string($0,kAXIdentifierAttribute)=="current_login_nick_name"}),
+               let open=try? find(root,["Open WeChat","Log In","登录","进入微信","打开微信"]) {
+                try press(open)
+                emit(["loginStarted":true]);exit(0)
+            }
+            if (try? find(root,["Discover","发现"])) != nil { break }
+            Thread.sleep(forTimeInterval:0.2)
+        } while Date()<deadline
+        emit(["loginStarted":false]);exit(0)
     case "moments.ready":
         try momentReady(root);emit(["ready":true]);exit(0)
     case "moments.compose":
@@ -303,7 +426,13 @@ do {
         emit(momentState(root));exit(0)
     case "moments.cancel", "moments.post", "moments.emoji", "moments.mention", "moments.visibility", "moments.ai", "moments.add-media":
         guard let composer=momentComposer(root) else { throw ControlError(code:"moment_composer_not_found") }
+        // Raise the existing draft rather than treating lost focus as a closed draft.
+        if let window=elements(root).first(where:{string($0,kAXRoleAttribute)==kAXWindowRole && elements($0).contains(where:{CFEqual($0,composer)})}) {
+            AXUIElementPerformAction(window,kAXRaiseAction as CFString)
+            Thread.sleep(forTimeInterval:0.2)
+        }
         // A selector or assistant must be closed before a final action.
+        guard momentElements(root).contains(where:{CFEqual($0,composer)}) else { throw ControlError(code:"moment_finish_native_selection") }
         guard let focused=attribute(root,kAXFocusedWindowAttribute),
               elements(focused as! AXUIElement).contains(where:{CFEqual($0,composer)}) || CFEqual(focused,composer) else { throw ControlError(code:"moment_finish_native_selection") }
         if ["moments.ai","moments.mention","moments.visibility"].contains(action) { try scrollMoment(composer,pid,true) }

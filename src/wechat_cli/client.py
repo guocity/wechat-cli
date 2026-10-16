@@ -50,6 +50,9 @@ class ApiClient:
     def chats(self):
         return self.request("/api/native/chats")
 
+    def moments(self, limit=20):
+        return self.request("/api/moments?" + urlencode({"limit": limit}))
+
     def messages(self, chat_id, limit=50):
         return self.request("/api/native/messages?" + urlencode({"chatId": chat_id, "limit": limit}))
 

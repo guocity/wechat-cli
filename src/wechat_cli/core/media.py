@@ -10,17 +10,19 @@ import tempfile
 import urllib.error
 import urllib.request
 import wave
+from email.message import Message as HeaderMessage
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from wechat_cli.core.dependencies import require_modules
 from wechat_cli.core.errors import AppError
-from wechat_cli.core.models import media_descriptor
+from wechat_cli.core.models import channels_descriptor, media_descriptor
 from wechat_cli.core.network import NoRedirect, ssl_context
 
 MAX_MEDIA = 32 * 1024**2
 CDN_HOSTS = {
     "wxapp.tc.qq.com",
+    "finder.video.qq.com",
     "emoji.qpic.cn",
     "mmbiz.qpic.cn",
     "emoji.qpic.tc.qq.com",
@@ -121,7 +123,7 @@ def cdn_url(raw):
         raise AppError("media_url_denied", "Media URL is outside the supported WeChat CDN", 422) from None
 
 
-def download_media(raw):
+def download_media(raw, *, maximum=MAX_MEDIA, with_name=False):
     opener = urllib.request.build_opener(
         urllib.request.ProxyHandler({}), NoRedirect(), urllib.request.HTTPSHandler(context=ssl_context())
     )
@@ -129,9 +131,15 @@ def download_media(raw):
     for _ in range(3):
         try:
             with opener.open(url, timeout=10) as response:
-                data = response.read(MAX_MEDIA + 1)
-                if len(data) > MAX_MEDIA:
-                    raise AppError("media_too_large", "Media exceeds the 32 MiB limit", 413)
+                data = response.read(maximum + 1)
+                if len(data) > maximum:
+                    raise AppError(
+                        "media_too_large", f"Media exceeds the {maximum // 1024**2} MiB limit", 413
+                    )
+                if with_name:
+                    header = HeaderMessage()
+                    header["Content-Disposition"] = response.headers.get("Content-Disposition", "")
+                    return data, header.get_filename()
                 return data
         except urllib.error.HTTPError as error:
             if error.code in {301, 302, 303, 307, 308} and error.headers.get("Location"):
@@ -143,6 +151,66 @@ def download_media(raw):
     raise AppError("media_download_failed", "Too many CDN redirects", 502)
 
 
+def complete_mp4(data):
+    """Require a complete bounded ISO BMFF file, not just an ftyp signature."""
+    offset, boxes = 0, set()
+    while offset + 8 <= len(data):
+        size = int.from_bytes(data[offset : offset + 4], "big")
+        kind = data[offset + 4 : offset + 8]
+        header = 8
+        if size == 1:
+            if offset + 16 > len(data):
+                return False
+            size, header = int.from_bytes(data[offset + 8 : offset + 16], "big"), 16
+        elif size == 0:
+            size = len(data) - offset
+        if size < header or offset + size > len(data):
+            return False
+        boxes.add(kind)
+        offset += size
+    return offset == len(data) and {b"ftyp", b"moov", b"mdat"} <= boxes
+
+
+def channels_filename(raw, fallback):
+    name = re.split(r"[/\\]", raw or "")[-1]
+    name = re.sub(r'[\x00-\x1f\x7f<>:"|?*]', "_", name).strip(" .")[:180]
+    if not name or not name.lower().endswith(".mp4"):
+        name = "channels-" + re.sub(r"[^a-zA-Z0-9_-]", "_", str(fallback))[:80] + ".mp4"
+    return name
+
+
+def read_channels(message, variant):
+    descriptor = channels_descriptor(message)
+    remote = descriptor.get("thumbnailUrl" if variant == "preview" else "url")
+    if not remote:
+        raise AppError(
+            "channels_media_unavailable", "This Channels card contains no downloadable media URL", 404
+        )
+    try:
+        data, name = download_media(remote, maximum=128 * 1024**2, with_name=True)
+    except AppError as error:
+        if variant == "full" and error.code == "media_download_failed":
+            raise AppError(
+                "channels_video_unavailable",
+                "WeChat CDN rejected this card's video URL. Its cover can still be displayed, but this message cannot currently supply an MP4.",
+                502,
+            ) from None
+        raise
+    if variant == "preview":
+        mime = mime_type(data) or ""
+        if mime.startswith("image/"):
+            return data, mime, None
+        raise AppError("channels_preview_unavailable", "The Channels cover is unavailable", 422)
+    if not complete_mp4(data):
+        raise AppError(
+            "channels_video_unavailable",
+            "WeChat returned encrypted or incomplete video. This card cannot be played or saved as MP4.",
+            422,
+        )
+    name = channels_filename(name or descriptor.get("fileName"), descriptor.get("objectId") or message["id"])
+    return data, "video/mp4", name
+
+
 def find_message(native, chat_id, identifier):
     message = next((m for m in native.messages(chat_id, 100)["items"] if m["id"] == identifier), None)
     if message is None:
@@ -152,6 +220,10 @@ def find_message(native, chat_id, identifier):
 
 def read_media(native, chat_id, identifier, variant="full"):
     message = find_message(native, chat_id, identifier)
+    if message["kind"] == "channels_video":
+        if variant == "full" and hasattr(native, "channels_video"):
+            return native.channels_video(message)
+        return read_channels(message, variant)
     if message["kind"] == "file":
         details = message["details"]
         size = details.get("sizeBytes", 0)

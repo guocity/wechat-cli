@@ -41,6 +41,17 @@ class MessageRef(Empty):
     id: MessageId
 
 
+class MomentsQuery(Empty):
+    limit: int = Field(default=20, ge=1, le=1000)
+
+    @field_validator("limit", mode="before")
+    @classmethod
+    def canonical_limit(cls, value):
+        if isinstance(value, str) and re.fullmatch(r"[1-9][0-9]{0,3}", value):
+            return int(value)
+        return value
+
+
 class MediaQuery(MessageRef):
     variant: Literal["full", "preview"] = "full"
 

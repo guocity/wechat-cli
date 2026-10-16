@@ -15,6 +15,7 @@ from wechat_cli.core.config import private_directory
 from wechat_cli.core.errors import AppError
 from wechat_cli.core.media import decode_upload
 
+from .processes import check_instance
 from .setup import ASSETS, execute, load_runtime
 
 
@@ -23,6 +24,7 @@ class Controls:
         self.directory = directory
         self.lock = threading.Lock()
         self.moment_session = None
+        self.moment_folder = None
 
     def invoke(self, action, **extra):
         runtime = load_runtime(self.directory)
@@ -45,18 +47,17 @@ class Controls:
                 os.replace(temporary, binary)
             finally:
                 temporary.unlink(missing_ok=True)
-        processes = execute(["/bin/ps", "-axo", "pid=,comm="], timeout=5).decode()
         expected = Path(runtime["app"]) / "Contents/MacOS/WeChat"
-        matches = matching_processes(processes, expected)
-        if len(matches) != 1:
+        pid = check_instance(expected)
+        if pid is None:
             raise AppError("native_process_identity_mismatch", "Configured WeChat is not running", 409)
         try:
             result = subprocess.run(
                 [str(binary)],
-                input=json.dumps({"pid": int(matches[0]), "app": runtime["app"], "action": action, **extra}),
+                input=json.dumps({"pid": pid, "app": runtime["app"], "action": action, **extra}),
                 text=True,
                 capture_output=True,
-                timeout=160 if action == "moments.compose" else 60 if action.startswith("moments.") else 20,
+                timeout=160 if action in {"moments.compose", "moments.list"} else 60 if action.startswith("moments.") else 20,
                 check=True,
             )
             value = json.loads(result.stdout)

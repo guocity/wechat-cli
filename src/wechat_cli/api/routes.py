@@ -19,6 +19,7 @@ from .schemas import (
     MessageRef,
     MomentAction,
     MomentInput,
+    MomentsQuery,
     TextInput,
     VoiceInput,
 )
@@ -67,6 +68,13 @@ def controls(svc: Service, query: Annotated[Empty, Query()]):
 @router.post("/messages/prepare")
 def prepare_text(svc: Service, payload: TextInput):
     return svc.prepare_text(payload.chatId, payload.text)
+
+
+@router.get("/moments")
+def moments(svc: Service, query: Annotated[MomentsQuery, Query()]):
+    if not svc.backend.capabilities().get("momentsReading"):
+        raise AppError("native_feature_unavailable", "Moments reading requires macOS", 424)
+    return svc.backend.moments(query.limit)
 
 
 @router.post("/moments/post")

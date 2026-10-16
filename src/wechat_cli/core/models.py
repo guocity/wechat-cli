@@ -154,6 +154,10 @@ def resolve_message(raw, depth=0):
         url = web_url(value(app, "url"))
         if url:
             details["url"] = url
+        if kind == "channels_video":
+            feed = find(app, "finderFeed")
+            details.update(author=value(feed, "nickname"), description=value(feed, "desc"))
+            details["title"] = details["description"] or details["author"] or details["title"]
         if kind == "file":
             details.update(fileName=details["title"], extension=value(app, "appattach/fileext"))
             size = value(app, "appattach/totallen")
@@ -240,6 +244,20 @@ def resolve_message(raw, depth=0):
         message["summary"] = text(find(tree, "title")) or text(find(tree, "wording")) or label
     message["displaySummary"] = message["summary"]
     return message
+
+
+def channels_descriptor(message):
+    """Read only the first video in a message's shared Channels card."""
+    feed = find(xml(message.get("content", "")), "finderFeed")
+    if feed is None:
+        return {}
+    media = next((m for m in feed.findall("mediaList/media") if value(m, "mediaType") == "4"), None)
+    return {
+        "url": web_url(value(media, "url")),
+        "thumbnailUrl": web_url(value(media, "coverUrl") or value(media, "thumbUrl")),
+        "fileName": value(media, "fileName"),
+        "objectId": value(feed, "objectId"),
+    }
 
 
 def media_descriptor(message):

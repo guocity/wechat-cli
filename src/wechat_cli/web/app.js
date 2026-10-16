@@ -1,7 +1,7 @@
 'use strict';
 const el = id => document.getElementById(id);
 let selected = '', chats = [], busy = false, sequence = 0, offline = false;
-const attempts = new Map(), urls = new Set();
+const attempts = new Map(), urls = new Set(), coverObservers = new Set();
 let capabilities={};
 const authenticated = fetch('/api/browser/session', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(async r=>{if(!r.ok)throw Error((await r.json()).message);});
 async function api(path, data, binary=false) {
@@ -16,13 +16,20 @@ async function api(path, data, binary=false) {
   let response;
   try{response=await fetch(path,options);}catch(error){disconnected();throw error;}
   if(!response.ok){const error=await response.json();if(data!==undefined&&(path==='/api/moments/compose'||path==='/api/moments/action'&&(data.action!=='post'||error.error==='moment_finish_native_selection')))attempts.delete(path+JSON.stringify(data));throw Error(error.message||error.error);}
-  const result=binary?await response.blob():await response.json();
+  let result=binary?await response.blob():await response.json();
+  if(binary==='media'){
+    const match=/filename\*=UTF-8''([^;]+)/i.exec(response.headers.get('Content-Disposition')||'');
+    let filename='channel-video.mp4';
+    if(match){try{filename=decodeURIComponent(match[1]);}catch(_){}}
+    result={blob:result,filename};
+  }
   if(data!==undefined)attempts.delete(path+JSON.stringify(data));
   return result;
 }
 function sync(){el('text').disabled=offline||!capabilities.sendMessages||!selected||busy;el('send').disabled=offline||!capabilities.sendMessages||!selected||busy||!el('text').value.trim();el('send-file').disabled=offline||!selected||busy||!el('file').files.length||!(el('file-kind').value==='file'?capabilities.fileSending:capabilities.voiceSending);el('history').disabled=offline||!selected||busy;syncMoment();}
 function disconnected(){
   if(offline)return;offline=true;sequence++;
+  for(const observer of coverObservers)observer.disconnect();coverObservers.clear();
   document.querySelectorAll('button,input,textarea,select').forEach(control=>{control.disabled=true;});
   el('status').textContent='WeChat session closed. Start wechat-cli again and reload this page.';
 }
@@ -49,16 +56,70 @@ function renderChats(){
 }
 async function refresh(){const result=await api('/api/native/chats');chats=result.items;renderChats();el('status').textContent=`${chats.length} conversations. ${result.order==='pinned_then_recent'?'Pinned first, then recent.':'Most recent first.'}`;}
 function button(article,label,task){const b=document.createElement('button');b.type='button';b.disabled=offline;b.textContent=label;b.onclick=()=>action(async()=>{b.disabled=true;try{await task();}finally{b.disabled=offline;}});article.append(b);}
+function channelMedia(article,params,current){
+  const status=document.createElement('p');status.setAttribute('role','status');
+  const cover=document.createElement('img');cover.alt='Channels cover';cover.hidden=true;article.append(cover);
+  cover.onerror=()=>{cover.hidden=true;coverStatus.textContent='Cover could not be displayed.';coverPending=undefined;retryCover.hidden=offline;};
+  const coverStatus=document.createElement('small');coverStatus.textContent='Loading cover…';article.append(coverStatus);
+  let pending, media, player, coverPending;
+  const retryCover=document.createElement('button');retryCover.type='button';retryCover.textContent='Retry cover';retryCover.hidden=true;
+  async function loadCover(){
+    if(coverPending)return coverPending;
+    retryCover.hidden=true;coverStatus.textContent='Loading cover…';
+    coverPending=(async()=>{
+      try{
+        const blob=await api('/api/native/media?'+new URLSearchParams({...params,variant:'preview'}),undefined,true);
+        if(!current())return;
+        if(!blob.type.startsWith('image/'))throw Error('WeChat did not return a cover image.');
+        const url=URL.createObjectURL(blob);urls.add(url);cover.src=url;cover.hidden=Boolean(player&&player.readyState>=2);if(player)player.poster=url;coverStatus.textContent='';
+      }catch(error){if(current()){coverStatus.textContent=error.message;retryCover.hidden=offline;}coverPending=undefined;}
+    })();
+    return coverPending;
+  }
+  retryCover.onclick=()=>loadCover();article.append(retryCover);
+  const observer=new IntersectionObserver(entries=>{
+    if(entries.some(entry=>entry.isIntersecting)){
+      observer.disconnect();coverObservers.delete(observer);if(current())loadCover();
+    }
+  },{rootMargin:'200px'});
+  coverObservers.add(observer);observer.observe(article);
+  async function load(){
+    if(!pending)pending=api('/api/native/media?'+new URLSearchParams(params),undefined,'media').catch(error=>{pending=undefined;throw error;});
+    const result=await pending;
+    if(!current())return null;
+    if(!media){
+      if(result.blob.type!=='video/mp4')throw Error('This Channels card did not return an MP4.');
+      const url=URL.createObjectURL(result.blob);urls.add(url);media={...result,url};
+    }
+    return media;
+  }
+  async function attempt(task){status.textContent='Loading Channels media…';try{await task();}catch(error){status.textContent=error.message;}}
+  button(article,'Play video',()=>attempt(async()=>{
+    const result=await load();if(!result)return;
+    if(!player){player=document.createElement('video');player.controls=true;player.preload='metadata';player.poster=cover.src;player.src=result.url;
+      player.onloadeddata=()=>{cover.hidden=true;};
+      player.onerror=()=>{status.textContent='The browser cannot decode this video. Use Download MP4 to save it.';};article.append(player);}
+    try{await player.play();status.textContent='Playing Channels video.';}catch(_){status.textContent='Video loaded. Use the player controls to play.';}
+  }));
+  button(article,'Download MP4',()=>attempt(async()=>{
+    const result=await load();if(!result)return;
+    const link=document.createElement('a');link.href=result.url;link.download=result.filename;link.textContent='Save '+result.filename;
+    article.append(link);link.click();status.textContent='Download ready: '+result.filename;
+  }));
+  article.append(status);
+}
 async function history(){
   const chatId=selected,request=++sequence;if(!chatId)return;
   const result=await api('/api/native/messages?'+new URLSearchParams({chatId,limit:el('limit').value}));
   if(request!==sequence||chatId!==selected)return;
+  for(const observer of coverObservers)observer.disconnect();coverObservers.clear();
   for(const url of urls)URL.revokeObjectURL(url);urls.clear();el('messages').replaceChildren();
   for(const message of result.items){
     const article=document.createElement('article'),meta=document.createElement('small'),text=document.createElement('p');
     meta.textContent=(message.senderName||message.groupSender||message.from||'Unknown sender')+' · '+(message.timestamp?new Date(message.timestamp*1000).toLocaleString():'')+' · '+message.typeLabel;
     text.textContent=message.displaySummary||message.summary;article.append(meta,text);
     const params={chatId,id:message.id};
+    if(capabilities.mediaPreviews&&message.kind==='channels_video')channelMedia(article,params,()=>request===sequence&&!offline);
     if(capabilities.mediaPreviews&&['image','sticker','video','voice','file'].includes(message.kind))button(article,message.kind==='file'?'Download file':'Load media',async()=>{
       const blob=await api('/api/native/media?'+new URLSearchParams(params),undefined,true);
       if(request!==sequence)return;

@@ -70,16 +70,18 @@ try:
     try:
         session = device.attach("Gadget")
     except frida.ServerNotRunningError:
-        check_instance(app / "Contents/MacOS/WeChat")
-        child = subprocess.Popen(
-            [str(app / "Contents/MacOS/WeChat")],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
+        # A starting app can exist before Gadget begins listening. Launching
+        # another copy in that interval creates our own single-instance conflict.
+        if check_instance(app / "Contents/MacOS/WeChat") is None:
+            child = subprocess.Popen(
+                ["/usr/bin/open", "-n", "-a", str(app)],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
         for attempt in range(250):
-            if child.poll() is not None:
+            if child is not None and child.poll() not in {None, 0}:
                 raise RuntimeError("native_copy_exited")
             try:
                 session = device.attach("Gadget")

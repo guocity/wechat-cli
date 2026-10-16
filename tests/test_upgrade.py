@@ -211,7 +211,7 @@ def test_backend_launches_selected_upgrade_instead_of_old_app(release, monkeypat
 
     def transport(command, environment):
         calls.append(environment)
-        return SimpleNamespace(connect=lambda: None, pid=123)
+        return SimpleNamespace(connect=lambda: None, pid=123, request=lambda *a: {"accountAvailable": True})
 
     monkeypatch.setattr(backend, "WorkerTransport", transport)
     backend.MacOSBackend(release.directory).connect()
