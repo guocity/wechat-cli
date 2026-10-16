@@ -1,5 +1,11 @@
 # Release notes
 
+## 0.2.3
+
+- Channels media resolution and video playback: direct native loading via compiled C++ helper on the Finder DedicatedWorker, with object-bound media tokens and secure decryption.
+- Automatic login behavior and Channels video recovery tests.
+- Extended Moments feed inspection with limit and pagination options.
+
 ## 0.2.2
 
 - Native Moments composer workflow on macOS (`wechat-cli moments post`, API routes, and web interface controls).

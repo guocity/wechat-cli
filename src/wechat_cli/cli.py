@@ -68,7 +68,9 @@ def parser():
     add("chats", "List native conversations")
     moments = add("moments", "List posts from the native Moments feed (macOS)")
     moments.add_argument("--limit", type=int, choices=range(1, 1001), default=20, metavar="1..1000")
-    moments.add_argument("--all", action="store_true", help="Scroll reachable feed, up to 1000 posts or two minutes")
+    moments.add_argument(
+        "--all", action="store_true", help="Scroll reachable feed, up to 1000 posts or two minutes"
+    )
     messages = add("messages", "Read recent messages, newest first")
     messages.add_argument("chat_id")
     messages.add_argument("--limit", type=int, choices=range(1, 101), default=50, metavar="1..100")
