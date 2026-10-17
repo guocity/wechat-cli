@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.2.4
+
+- WeChat Channels publishing functionality on macOS: manage the publishing lifecycle on the Channels page, handle video uploads, cover frames, options, and publishing session state via dedicated API routes and client methods.
+
 ## 0.2.3
 
 - Channels media resolution and video playback: direct native loading via compiled C++ helper on the Finder DedicatedWorker, with object-bound media tokens and secure decryption.
