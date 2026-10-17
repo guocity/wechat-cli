@@ -111,7 +111,13 @@ class LocalSecurity:
                 raise AppError("invalid_content_length", "Supply a bounded Content-Length", 411)
             maximum = (
                 86 * 1024**2
-                if path in {"/api/moments/post", "/api/moments/compose"}
+                if path
+                in {
+                    "/api/moments/post",
+                    "/api/moments/compose",
+                    "/api/channels/post",
+                    "/api/channels/compose",
+                }
                 else 12 * 1024**2
                 if path in {"/api/messages/file", "/api/messages/voice"}
                 else 1024

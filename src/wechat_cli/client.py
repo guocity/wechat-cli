@@ -69,6 +69,41 @@ class ApiClient:
             key=idempotency_key,
         )
 
+    def channel_status(self):
+        return self.request("/api/channels/status")
+
+    def update_channel(self, session_id, *, idempotency_key, **settings):
+        return self.request(
+            "/api/channels/update",
+            method="POST",
+            data={"sessionId": session_id, **settings},
+            key=idempotency_key,
+        )
+
+    def channel_options(self, session_id, kind, *, idempotency_key, query=None):
+        return self.request(
+            "/api/channels/options",
+            method="POST",
+            data={"sessionId": session_id, "kind": kind, **({"query": query} if query is not None else {})},
+            key=idempotency_key,
+        )
+
+    def compose_channel(self, payload, *, idempotency_key, post=False):
+        return self.request(
+            "/api/channels/post" if post else "/api/channels/compose",
+            method="POST",
+            data=payload,
+            key=idempotency_key,
+        )
+
+    def publish_channel(self, session_id, *, idempotency_key):
+        return self.request(
+            "/api/channels/publish",
+            method="POST",
+            data={"sessionId": session_id},
+            key=idempotency_key,
+        )
+
     def moment_action(self, session_id, action, *, idempotency_key=None):
         return self.request(
             "/api/moments/action",

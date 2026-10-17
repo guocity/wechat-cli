@@ -284,3 +284,17 @@ media through WeChat’s background Finder worker and decodes the MP4 locally.
 Uncached cards load without opening the native viewer or waiting for playback.
 Validated MP4s are cached privately for later playback/downloads. No extra backend
 or proxy is needed. See [setup, usage and current limits](docs/channels-playback.md).
+
+
+## Channels video publishing (experimental, macOS)
+
+The local API now provides `/api/channels/compose`, `/api/channels/post`,
+`/api/channels/publish`, and read-only `/api/channels/status`. It reuses the
+prepared Channels research app and the publishing page already open inside
+WeChat. No separate browser login is needed. MP4 limits are 256 MiB from a local `videoPath` or 64 MiB as base64;
+submission receipts do not confirm publication. Live upload of a 203 MiB MP4 is verified;
+publication remains unverified. See [setup, examples, and limits](docs/channels-publishing.md).
+
+Channels drafts also support `/api/channels/update` and `/api/channels/options`
+for description/title, location, supported links, activities, scheduling,
+originality and video labels. Originality terms remain a native user review step.

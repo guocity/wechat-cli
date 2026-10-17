@@ -199,6 +199,26 @@ class MacOSBackend:
 
         return post_moment(self.controls, payload)
 
+    def channel_status(self):
+        from .channels_publisher import operate
+
+        return operate(self)
+
+    def update_channel(self, payload, *, choices=False):
+        from .channels_publisher import edit
+
+        return edit(self, payload, choices=choices)
+
+    def compose_channel(self, payload, *, post=False):
+        from .channels_publisher import operate
+
+        return operate(self, payload, post=post)
+
+    def publish_channel(self, session_id):
+        from .channels_publisher import operate
+
+        return operate(self, post=True, session_id=session_id)
+
     def moments(self, limit=20):
         from wechat_cli.core.errors import AppError
 
@@ -236,6 +256,7 @@ class MacOSBackend:
             "voiceSending": "wechat_native_queue",
             "momentsPosting": "wechat_native_ui",
             "momentsReading": "wechat_native_ui",
+            "channelsPosting": "wechat_embedded_browser_experimental",
         }
 
 

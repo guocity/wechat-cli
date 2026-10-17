@@ -33,7 +33,8 @@ rpc.exports={
     validate();workers.clear();
     const tls=framework.base.add(0xb61c228),key=tls.add(8).readU32(),offset=tls.add(12).readU32();
     if(key>=1024||offset>1048576)throw Error('unsupported_native_tls');
-    const known=new Set(Process.enumerateThreads().filter(t=>t.name==='DedicatedWorker thread').map(t=>t.id));
+    const threadName=typeof CHANNELS_THREAD_NAME==='string'?CHANNELS_THREAD_NAME:'DedicatedWorker thread';
+    const known=new Set(Process.enumerateThreads().filter(t=>t.name===threadName).map(t=>t.id));
     const task=Module.getGlobalExportByName('mach_task_self_').readU32();
     const array=Memory.alloc(8),count=Memory.alloc(4),info=Memory.alloc(48),infoCount=Memory.alloc(4);
     const taskThreads=new NativeFunction(Module.getGlobalExportByName('task_threads'),'int',['uint','pointer','pointer']);

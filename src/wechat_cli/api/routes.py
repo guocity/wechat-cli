@@ -12,6 +12,10 @@ from wechat_cli.core.models import receipt
 from wechat_cli.core.services import WeChatService, transcript
 
 from .schemas import (
+    ChannelChoicesInput,
+    ChannelPublishInput,
+    ChannelUpdateInput,
+    ChannelVideoInput,
     Empty,
     FileInput,
     HistoryQuery,
@@ -35,6 +39,55 @@ def service(request: Request):
 
 Service = Annotated[WeChatService, Depends(service)]
 Key = Annotated[str | None, Header(alias="Idempotency-Key", pattern=r"^[A-Za-z0-9_-]{8,128}$")]
+
+
+def channels_backend(svc):
+    if not svc.backend.capabilities().get("channelsPosting"):
+        raise AppError(
+            "native_feature_unavailable", "Channels publishing requires the macOS research runtime", 424
+        )
+    return svc.backend
+
+
+@router.get("/channels/status")
+def channel_status(svc: Service, query: Annotated[Empty, Query()]):
+    return channels_backend(svc).channel_status()
+
+
+@router.post("/channels/compose")
+def channel_compose(svc: Service, payload: ChannelVideoInput, key: Key = None):
+    backend = channels_backend(svc)
+    data = payload.model_dump()
+    return svc.once("/api/channels/compose", key, data, lambda: backend.compose_channel(data))
+
+
+@router.post("/channels/post")
+def channel_post(svc: Service, payload: ChannelVideoInput, key: Key = None):
+    backend = channels_backend(svc)
+    data = payload.model_dump()
+    return svc.once("/api/channels/post", key, data, lambda: backend.compose_channel(data, post=True))
+
+
+@router.post("/channels/publish")
+def channel_publish(svc: Service, payload: ChannelPublishInput, key: Key = None):
+    backend = channels_backend(svc)
+    return svc.once(
+        "/api/channels/publish", key, payload.model_dump(), lambda: backend.publish_channel(payload.sessionId)
+    )
+
+
+@router.post("/channels/update")
+def channel_update(svc: Service, payload: ChannelUpdateInput, key: Key = None):
+    backend = channels_backend(svc)
+    data = payload.model_dump(exclude_none=True)
+    return svc.once("/api/channels/update", key, data, lambda: backend.update_channel(data))
+
+
+@router.post("/channels/options")
+def channel_choices(svc: Service, payload: ChannelChoicesInput, key: Key = None):
+    backend = channels_backend(svc)
+    data = payload.model_dump(exclude_none=True)
+    return svc.once("/api/channels/options", key, data, lambda: backend.update_channel(data, choices=True))
 
 
 @router.get("/native/status")
