@@ -630,18 +630,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pilk"
-version = "0.2.4"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/66/bb/938dd697b6bc2d851ffec4ffe82ed20078e58bd0ef049e84f4d038d6f991/pilk-0.2.4.tar.gz", hash = "sha256:d4a1bcf93dc6ef5e95e0cfd728ed4ef4d49f9c0476d70816fecbe456cc762e7f", size = 226451, upload-time = "2023-05-26T03:32:34.133Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ff/06/80cac61bc7f791bcaae552ba90fb868f7af7503ef1c74e423cc20fca1a53/pilk-0.2.4-cp311-cp311-win_amd64.whl", hash = "sha256:a6692096607e8d77d348aeec00df633788c85b527aa83cbd803ddf508936db7f", size = 127024, upload-time = "2023-05-26T03:32:24.524Z" },
-]
-
-[[package]]
 name = "pillow"
 version = "12.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1120,7 +1108,6 @@ dependencies = [
     { name = "cryptography", marker = "sys_platform == 'darwin'" },
     { name = "fastapi" },
     { name = "frida", marker = "sys_platform == 'darwin' or sys_platform == 'win32'" },
-    { name = "pilk", marker = "sys_platform == 'darwin'" },
     { name = "pillow", marker = "sys_platform == 'darwin'" },
     { name = "truststore" },
     { name = "uvicorn" },
@@ -1131,7 +1118,6 @@ dependencies = [
 dev = [
     { name = "capstone" },
     { name = "cryptography" },
-    { name = "pilk", marker = "python_full_version < '3.12' or sys_platform != 'win32'" },
     { name = "pillow" },
     { name = "pytest" },
     { name = "ruff" },
@@ -1143,7 +1129,6 @@ requires-dist = [
     { name = "cryptography", marker = "sys_platform == 'darwin'", specifier = ">=44,<49" },
     { name = "fastapi", specifier = ">=0.115,<1" },
     { name = "frida", marker = "sys_platform == 'darwin' or sys_platform == 'win32'", specifier = "==17.8.0" },
-    { name = "pilk", marker = "sys_platform == 'darwin'", specifier = ">=0.2.4,<0.3" },
     { name = "pillow", marker = "sys_platform == 'darwin'", specifier = ">=11,<13" },
     { name = "truststore", specifier = ">=0.10,<1" },
     { name = "uvicorn", specifier = ">=0.34,<1" },
@@ -1154,7 +1139,6 @@ requires-dist = [
 dev = [
     { name = "capstone", specifier = ">=5,<6" },
     { name = "cryptography", specifier = ">=44,<49" },
-    { name = "pilk", marker = "python_full_version < '3.12' or sys_platform != 'win32'", specifier = ">=0.2.4,<0.3" },
     { name = "pillow", specifier = ">=11,<13" },
     { name = "pytest", specifier = ">=8,<10" },
     { name = "ruff", specifier = ">=0.11,<1" },

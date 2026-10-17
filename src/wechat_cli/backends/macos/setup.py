@@ -21,6 +21,8 @@ from wechat_cli.core.config import PACKAGE, private_directory, save_json
 from wechat_cli.core.errors import AppError
 from wechat_cli.core.network import ssl_context
 
+from .native_assets import native_asset
+
 RELEASE = json.loads((PACKAGE / "compatibility/macos.json").read_text(encoding="utf-8"))
 WECHAT_URL = RELEASE["installerUrl"]
 GADGET_URL = (
@@ -50,7 +52,7 @@ def execute(args, **kwargs):
         # Do not include command outputs; they may contain private paths or tokens.
         raise AppError(
             "setup_command_failed",
-            f"{Path(str(args[0])).name} failed; check Xcode command-line tools and app write permissions",
+            f"{Path(str(args[0])).name} failed; check app write permissions and macOS system tools",
             424,
         ) from error
 
@@ -221,16 +223,14 @@ def build_helper(app):
     # Gadget configuration lives in Frameworks, so codesign treats it as nested code.
     # A generic file signature is stored in extended attributes by macOS.
     execute(["/usr/bin/codesign", "--force", "--sign", "-", app / "Contents/Frameworks/FridaGadget.config"])
-    compiler = execute(["/usr/bin/clang++", "--version"])
-    flags = ["-arch", "arm64", "-std=c++17", "-dynamiclib", "-O2", "-Wall", "-Wextra", "-Werror"]
-    source = ASSETS / "bridge.cpp"
-    digest = hashlib.sha256(source.read_bytes() + compiler + json.dumps(flags).encode()).hexdigest()[:16]
+    source = native_asset("native-reader.dylib")
+    digest = fingerprint(source)[:16]
     library = f"native-reader-{digest}.dylib"
     output = app / "Contents/Frameworks" / library
-    if not output.exists():
+    if not output.exists() or fingerprint(output) != fingerprint(source):
         temporary = output.with_suffix(f".{os.getpid()}.tmp")
         try:
-            execute(["/usr/bin/clang++", *flags, source, "-o", temporary])
+            shutil.copyfile(source, temporary)
             os.replace(temporary, output)
         finally:
             temporary.unlink(missing_ok=True)

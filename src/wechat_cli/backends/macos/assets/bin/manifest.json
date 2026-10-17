@@ -1,0 +1,24 @@
+{
+  "architecture": "arm64",
+  "minimumMacOS": "13.0",
+  "silkSourceSha256": "d4a1bcf93dc6ef5e95e0cfd728ed4ef4d49f9c0476d70816fecbe456cc762e7f",
+  "sources": {
+    "bridge.cpp": "4de3cac116beaabf629b57ddcfcada9d16c5f47134dd8a97645435ff33160481",
+    "channels-native.cpp": "a0e5d5550b7ad2c0d443edb49796ffe1a155ad900994416082fa9ea6d09128c9",
+    "controls.swift": "12b5821d9a6d5defae58260bd32ab7967555725f08e7df5208cd0d1b82a1782a"
+  },
+  "files": {
+    "native-reader.dylib": {
+      "sha256": "bac3fe1714388faf075a08a27f8db9e1c9571878e320dbebf6db078e0329e887"
+    },
+    "channels-native-v2.dylib": {
+      "sha256": "9f80ec9bb8701bf1ab0f2e9cc3c68031d0953050128d1e3ed02d1063fc3d6a35"
+    },
+    "native-controls": {
+      "sha256": "78230b516eb0a3ae11a4b3774277bc1f285e9108bc582c691265b90d41bd5306"
+    },
+    "silk.dylib": {
+      "sha256": "2135fc2f8d4559b4cc2d811b0e327d13a1e8c97e161eb359951bce0491890a34"
+    }
+  }
+}

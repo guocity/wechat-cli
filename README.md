@@ -27,7 +27,7 @@ controls the visible history, and its Accessibility view does not expose stable
 post IDs, full media, or a complete account archive. The read-only HTTP endpoint
 is `GET /api/moments?limit=20` (1–1000); no idempotency key is needed.
 
-Dependency selection uses standard Python environment markers during installation. Both platforms install FastAPI, Uvicorn, OS TLS trust and Frida. macOS additionally installs Cryptography, Pillow and the SILK codec. Windows omits those media packages; Python 3.11–3.13 adds Zstandard, while Python 3.14+ uses the standard library. Runtime imports of macOS media libraries are lazy, so Windows can start its server without them. Developer test dependencies are separate and are not installed by `uvx`.
+Dependency selection uses standard Python environment markers during installation. Both platforms install FastAPI, Uvicorn, OS TLS trust and Frida. macOS additionally installs Cryptography and Pillow; its SILK codec ships as a prebuilt library. Windows omits those media packages; Python 3.11–3.13 adds Zstandard, while Python 3.14+ uses the standard library. Runtime imports of macOS media libraries are lazy, so Windows can start its server without them. Developer test dependencies are separate and are not installed by `uvx`.
 
 The same small wheel contains both backend modules and their source assets; platform markers select dependencies, not wheel files. No vendor app or native helper binary is bundled. Separate platform distributions would add release and version coordination without materially reducing this wheel.
 
@@ -39,7 +39,7 @@ On macOS, `setup` downloads WeChat 4.1.15 from Tencent and Frida Gadget 17.8.0 f
 
 It adds Gadget, builds the bundled C++ helper, signs the copy, and records its location. `/Applications/WeChat.app` is not modified. No WeChat app, Gadget binary, credentials or account data are redistributed in the Python package.
 
-macOS requires **Apple Silicon**, **Python 3.11+** (managed by uv when necessary), **uv**, and **Xcode command-line tools** (`xcode-select --install`). The native helper and SILK codec require a compiler. Setup runs as your normal user; do not use `sudo uvx`.
+macOS requires **Apple Silicon**, **macOS 13+**, **Python 3.11+** (managed by uv when necessary), and **uv**. The package includes prebuilt native libraries, controls, and the SILK codec; Xcode Command Line Tools are not required for installation or use. Setup runs as your normal user; do not use `sudo uvx`.
 
 On **Windows x64**, the same commands download Tencent's verified **4.1.15.53** installer, extract its portable app using Windows `tar.exe`, and prepare `%LOCALAPPDATA%\wechat-cli\apps\WeChat-4.1.15.53`. Python 3.11+ and uv are required; native operations need no compiler or external 7-Zip. The bridge attaches Frida to the verified main process and preserves the signed vendor binaries. Run as the signed-in desktop user. For SSH launches, the same user must also have an interactive Windows session.
 

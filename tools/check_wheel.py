@@ -2,8 +2,13 @@
 
 import argparse
 import email
+import hashlib
+import json
 import zipfile
 from pathlib import Path
+
+NATIVE_ROOT = "wechat_cli/backends/macos/assets/bin/"
+NATIVE_FILES = {"native-reader.dylib", "channels-native-v2.dylib", "silk.dylib", "native-controls"}
 
 REQUIRED = {
     "wechat_cli/core/dependencies.py",
@@ -45,9 +50,17 @@ def main():
     with zipfile.ZipFile(args.wheel) as archive:
         names = set(archive.namelist())
         assert REQUIRED <= names, REQUIRED - names
+        assert {NATIVE_ROOT + n for n in NATIVE_FILES | {"manifest.json", "SILK-LICENSE.txt"}} <= names
+        manifest = json.loads(archive.read(NATIVE_ROOT + "manifest.json"))
+        for name in NATIVE_FILES:
+            data = archive.read(NATIVE_ROOT + name)
+            assert data[:4] == b"\xcf\xfa\xed\xfe", name
+            assert hashlib.sha256(data).hexdigest() == manifest["files"][name]["sha256"], name
+        controls = archive.getinfo(NATIVE_ROOT + "native-controls")
+        assert (controls.external_attr >> 16) & 0o111, "Controls helper must be executable"
         assert not any(
             ".app/" in n
-            or n.endswith((".dylib", ".exe", ".dll"))
+            or (n.endswith((".dylib", ".exe", ".dll")) and n not in {NATIVE_ROOT + p for p in NATIVE_FILES})
             or "api-token" in n
             or "native-runtime.json" in n
             or ".venv/" in n
@@ -61,7 +74,7 @@ def main():
         assert metadata["Requires-Python"] == ">=3.11"
         entries = archive.read(next(n for n in names if n.endswith(".dist-info/entry_points.txt"))).decode()
         assert "wechat-cli = wechat_cli.cli:main" in entries
-        assert sum(i.file_size for i in archive.infolist()) < 2 * 1024**2
+        assert sum(i.file_size for i in archive.infolist()) < 6 * 1024**2
         print(f"{args.wheel.name}: assets, entry point, metadata and private-state exclusion passed")
 
 

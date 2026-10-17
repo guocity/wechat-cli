@@ -1,5 +1,9 @@
 # Release notes
 
+## Unreleased
+
+- Bundle signed Apple Silicon C++ libraries, Swift controls, and a Python-ABI-independent SILK library. macOS setup and runtime no longer compile helpers or require Xcode Command Line Tools. Maintainers rebuild assets before packaging; missing, damaged, or stale release assets are rejected.
+
 ## 0.2.4
 
 - WeChat Channels publishing functionality on macOS: manage the publishing lifecycle on the Channels page, handle video uploads, cover frames, options, and publishing session state via dedicated API routes and client methods.

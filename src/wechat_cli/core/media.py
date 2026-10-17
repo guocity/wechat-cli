@@ -354,14 +354,9 @@ def silk_duration(data):
 
 def codec(action, data, rate=24000):
     try:
-        import importlib.util
+        from wechat_cli.backends.macos.native_assets import native_asset
 
-        if importlib.util.find_spec("pilk") is None:
-            raise AppError(
-                "audio_extra_required",
-                "SILK codec is missing; run uvx --refresh wechat-cli setup on macOS",
-                424,
-            )
+        native_asset("silk.dylib")
         with tempfile.TemporaryDirectory(prefix="wechat-audio-") as temporary:
             source, destination = Path(temporary) / "input", Path(temporary) / "output"
             source.write_bytes(data)

@@ -16,8 +16,8 @@ from wechat_cli.core.errors import AppError
 @pytest.mark.parametrize(
     "system,version,native",
     [
-        ("darwin", "3.11", {"frida", "cryptography", "pillow", "pilk"}),
-        ("darwin", "3.15", {"frida", "cryptography", "pillow", "pilk"}),
+        ("darwin", "3.11", {"frida", "cryptography", "pillow"}),
+        ("darwin", "3.15", {"frida", "cryptography", "pillow"}),
         ("win32", "3.11", {"frida", "zstandard"}),
         ("win32", "3.13", {"frida", "zstandard"}),
         ("win32", "3.14", {"frida"}),

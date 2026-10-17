@@ -20,7 +20,8 @@ from pathlib import Path
 
 from wechat_cli.backends.macos.channels import RENDERER
 from wechat_cli.backends.macos.channels_native import HELPER
-from wechat_cli.backends.macos.setup import ASSETS, check_payload
+from wechat_cli.backends.macos.native_assets import native_asset
+from wechat_cli.backends.macos.setup import check_payload
 
 RENDERER_SHA256 = "54e5542ed950e98092407982da638cc44f178910c53b879d925cf8e5edc8a52c"
 
@@ -101,16 +102,7 @@ def prepare(source, destination):
         )
         config.chmod(0o600)
         native_helper = binary.parent / HELPER
-        execute(
-            "/usr/bin/clang++",
-            "-std=c++17",
-            "-arch",
-            "arm64",
-            "-dynamiclib",
-            ASSETS / "channels-native.cpp",
-            "-o",
-            native_helper,
-        )
+        shutil.copyfile(native_asset("channels-native-v2.dylib"), native_helper)
         execute("/usr/bin/codesign", "--force", "--sign", "-", native_helper)
         add_loader(binary)
         for item in [binary.parent / "g", config]:

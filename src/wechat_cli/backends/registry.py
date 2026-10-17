@@ -9,7 +9,7 @@ from wechat_cli.core.errors import AppError
 
 def platform_backend():
     if platform.system() == "Darwin" and platform.machine() == "arm64":
-        require_modules(("frida", "cryptography", "PIL", "pilk"))
+        require_modules(("frida", "cryptography", "PIL"))
         from .macos import backend
 
         return backend

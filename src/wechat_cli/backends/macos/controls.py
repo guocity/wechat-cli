@@ -1,8 +1,6 @@
 """macOS Accessibility operations scoped to the configured WeChat process."""
 
-import hashlib
 import json
-import os
 import re
 import subprocess
 import tempfile
@@ -15,8 +13,9 @@ from wechat_cli.core.config import private_directory
 from wechat_cli.core.errors import AppError
 from wechat_cli.core.media import decode_upload
 
+from .native_assets import native_asset
 from .processes import check_instance
-from .setup import ASSETS, execute, load_runtime
+from .setup import load_runtime
 
 
 class Controls:
@@ -28,25 +27,7 @@ class Controls:
 
     def invoke(self, action, **extra):
         runtime = load_runtime(self.directory)
-        source = ASSETS / "controls.swift"
-        digest = hashlib.sha256(source.read_bytes()).hexdigest()[:16]
-        binary = self.directory / f"native-controls-{digest}"
-        if not binary.exists():
-            temporary = binary.with_suffix(f".{os.getpid()}.tmp")
-            try:
-                execute(
-                    [
-                        "/usr/bin/swiftc",
-                        "-module-cache-path",
-                        self.directory / "swift-cache",
-                        source,
-                        "-o",
-                        temporary,
-                    ]
-                )
-                os.replace(temporary, binary)
-            finally:
-                temporary.unlink(missing_ok=True)
+        binary = native_asset("native-controls")
         expected = Path(runtime["app"]) / "Contents/MacOS/WeChat"
         pid = check_instance(expected)
         if pid is None:

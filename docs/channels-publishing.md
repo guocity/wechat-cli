@@ -132,9 +132,7 @@ No re-upload is needed. Omitted/null options keep the current setting.
 session = client.channel_status()["sessionId"]
 
 # Inspect exact choices first. Searching changes the native picker, not the post.
-places = client.channel_options(
-    session, "location", query="Park", idempotency_key="channel-place-search-001"
-)
+places = client.channel_options(session, "location", query="Park", idempotency_key="channel-place-search-001")
 print(places["choices"])  # name, detail, and unique value
 
 # Apply only the requested settings. This call never clicks Publish.
@@ -144,9 +142,9 @@ result = client.update_channel(
     description="Roadster interface demo #Roadster",
     title="Roadster UI",
     options={
-        "location": "",          # hide location; or use an exact choices[].value
+        "location": "",  # hide location; or use an exact choices[].value
         "link": {"type": "none"},
-        "activity": "",          # do not participate
+        "activity": "",  # do not participate
         "scheduleAt": "immediate",
         "declareOriginal": False,
         "videoLabel": "No label needed",
