@@ -10,12 +10,18 @@ class Input { constructor() { this._value=''; this.events=[]; this.disabled=fals
   dispatchEvent(e) { this.events.push(e.type); }
 }
 const editor = new Input(); editor.innerText='';
+Object.defineProperty(editor,'textContent',{get(){return this.innerText;},set(v){this.innerText=v;}});
+const postModel={postValidState:{canPost:false},description:''};
+const mediaModel={fileList:[{status:'uploading'}]};
+let captionChanges=0;
+const descModel={$refs:{inputEditor:editor},updateDescData(){postModel.description=editor.innerText;captionChanges++;}};
 const title = new Input();
 const upload = new Input(); upload.accept='video/mp4,video/*'; upload.files=[];
 const publish = new Input(); publish.textContent='发表'; publish.cssDisabled=true; publish.clicks=0;
 publish.classList={contains:()=>publish.cssDisabled}; publish.click=()=>{publish.clicks++;};
 const queries={'.input-editor[contenteditable]':[editor],
   'input[placeholder="填写短标题有机会获得更多流量"]':[title], 'input[type=file]':[upload],
+  '.post-create-wrap':[{__vue__:postModel}],'.post-edit-wrap':[{__vue__:mediaModel}],'.post-desc-box':[{__vue__:descModel}],
   'button':[publish], '[role=dialog],.weui-desktop-dialog__wrp':[], 'video':[]};
 const sandbox={location:{origin:'https://channels.weixin.qq.com',pathname:'/micro/content/post/create'},
   window:{},document:{querySelectorAll:s=>queries[s]||[]},getComputedStyle:()=>({visibility:'visible'}),
@@ -37,11 +43,18 @@ assert.deepEqual(upload.events,['change']);
 assert.equal(call({action:'post',sessionId:id}).error,'channels_upload_not_ready');
 assert.equal(publish.clicks,0); // CSS disabled must block, even when button.disabled is false.
 publish.cssDisabled=false;
+assert.equal(postModel.description,'caption');assert.equal(captionChanges,1);
+assert.equal(call({action:'status'}).status,'processing');
+assert.equal(call({action:'post',sessionId:id}).error,'channels_upload_not_ready');
+postModel.postValidState.canPost=true;
+assert.equal(call({action:'status'}).status,'processing');
+mediaModel.fileList[0].status='done';
 assert.equal(call({action:'status'}).status,'ready');
 assert.equal(call({action:'post',sessionId:'other'}).error,'channels_session_not_found');
 // Settings commands must preserve the upload and never submit it.
 call({action:'options-text',sessionId:id,description:'new description',title:'new title'});
 assert.equal(title.value,'new title');
+assert.equal(postModel.description,'new description');assert.equal(captionChanges,2);
 const root=new Input(); root.querySelector=()=>null;
 queries['.post-position-wrap']=[root];
 const makeOption=(name,detail)=>{const e=new Input();e.textContent=name;e.querySelector=sel=>sel.startsWith('.name')?{textContent:name}:detail?{textContent:detail}:null;e.click=()=>{e.selected=true;};return e;};

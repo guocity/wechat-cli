@@ -19,11 +19,25 @@ def main_processes(snapshot):
     return result
 
 
+def collapse_bootstrap(snapshot):
+    """A same-image child replaces its bootstrap parent; siblings remain distinct."""
+    rows = []
+    for line in snapshot.splitlines():
+        fields = line.strip().split(None, 2)
+        if len(fields) == 3 and fields[0].isdigit() and fields[1].isdigit():
+            rows.append((int(fields[0]), int(fields[1]), fields[2]))
+    images = {pid: path for pid, _, path in rows}
+    parents = {parent for _, parent, path in rows if images.get(parent) == path}
+    return "\n".join(f"{pid} {path}" for pid, _, path in rows if pid not in parents)
+
+
 def process_snapshot():
     try:
-        return subprocess.run(
-            ["/bin/ps", "-axo", "pid=,comm="], check=True, capture_output=True, text=True, timeout=3
-        ).stdout
+        return collapse_bootstrap(
+            subprocess.run(
+                ["/bin/ps", "-axo", "pid=,ppid=,comm="], check=True, capture_output=True, text=True, timeout=3
+            ).stdout
+        )
     except (OSError, subprocess.SubprocessError):
         raise AppError(
             "process_check_failed", "Cannot verify that only one WeChat instance is running", 424

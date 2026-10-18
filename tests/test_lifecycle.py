@@ -111,3 +111,12 @@ def test_authenticated_stop_closes_bridge_and_port(api):
     server.thread.join(timeout=3)
     assert native.closed
     assert not server.thread.is_alive()
+
+
+def test_native_bootstrap_child_is_one_instance_but_siblings_are_distinct():
+    from wechat_cli.backends.macos.processes import collapse_bootstrap
+
+    path = "/Applications/WeChat.app/Contents/MacOS/WeChat"
+    assert collapse_bootstrap(f"10 1 {path}\n11 10 {path}") == f"11 {path}"
+    assert collapse_bootstrap(f"10 1 {path}\n11 1 {path}") == f"10 {path}\n11 {path}"
+    assert collapse_bootstrap(f"10 1 {path}\n11 10 /Other/WeChat") == f"10 {path}\n11 /Other/WeChat"

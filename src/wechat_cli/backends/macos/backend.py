@@ -52,15 +52,19 @@ class MacOSBackend:
     def auto_login(self):
         if self.status().get("accountAvailable"):
             return
-        result = self.controls.invoke("login.saved")
-        if not result.get("loginStarted"):
+        result = self._request("loginSaved")
+        if not result.get("supported") or result.get("savedAccountAvailable") is False:
             return
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
-            if self.status().get("accountAvailable"):
+            status = self.status()
+            if status.get("accountAvailable"):
+                return
+            native_login = status.get("autoLogin", {})
+            if native_login.get("savedAccountAvailable") is False or native_login.get("failure"):
                 return
             time.sleep(0.25)
-        # Keep the service available for QR/phone confirmation when required.
+        # Keep the service available when native login requires phone confirmation.
 
     def is_alive(self):
         return bool(

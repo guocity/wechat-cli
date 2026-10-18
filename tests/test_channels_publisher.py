@@ -216,3 +216,40 @@ def test_update_stops_at_existing_dialog():
     with pytest.raises(AppError) as error:
         publisher.apply_settings(call, "session", {"description": "caption"})
     assert error.value.code == "channels_dialog_open"
+
+
+def test_upload_opens_composer_and_cleans_connections_before_retry(monkeypatch):
+    events = []
+
+    @contextmanager
+    def page(app, *, authenticate=False, authorize=None):
+        assert authenticate
+        events.append("scan")
+        try:
+            if events.count("scan") == 1:
+                raise AppError("channels_page_not_found", "closed")
+            if events.count("scan") == 2:
+                raise AppError("channels_form_changed", "loading")
+            yield lambda command: {"status": "empty"}
+        finally:
+            events.append("cleanup")
+
+    monkeypatch.setattr(publisher, "publishing_page", page)
+    monkeypatch.setattr(publisher, "open_channels_entry", lambda backend: events.append("open"))
+    monkeypatch.setattr(publisher.time, "sleep", lambda seconds: None)
+    with publisher.upload_page(object(), "/app") as call:
+        assert call({"action": "status"}) == {"status": "empty"}
+    assert events == ["scan", "cleanup", "open", "scan", "cleanup", "scan", "cleanup"]
+
+
+def test_ambiguous_page_is_never_navigated_or_reopened(monkeypatch):
+    @contextmanager
+    def page(*args, **kwargs):
+        raise AppError("channels_page_ambiguous", "multiple")
+        yield
+
+    monkeypatch.setattr(publisher, "publishing_page", page)
+    monkeypatch.setattr(publisher, "open_channels_entry", lambda backend: pytest.fail("must not open"))
+    with pytest.raises(AppError, match="multiple"):
+        with publisher.upload_page(object(), "/app"):
+            pytest.fail("must not yield")

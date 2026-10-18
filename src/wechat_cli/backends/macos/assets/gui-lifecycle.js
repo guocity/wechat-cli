@@ -113,13 +113,14 @@
     policy.installed = true;
   }
   const interval = setInterval(() => dispatch(queue, ptr(0), check), 250);
-  policy.dispose = () => new Promise(resolve => {
+  policy.dispose = () => {
     disposed = true;
     clearInterval(interval);
     if (timer !== null) clearTimeout(timer);
-    // Drain queued main-thread callbacks before the Frida script is unloaded.
-    const drained = new NativeCallback(() => resolve(), 'void', ['pointer']);
-    callbacks.push(drained);
-    dispatch(queue, ptr(0), drained);
-  });
+    // Wait until native callback epilogues have returned before unloading their
+    // executable code. Resolving a Promise inside a drain callback races unload.
+    const sync = new NativeFunction(exp('dispatch_sync_f'), 'void',
+      ['pointer', 'pointer', 'pointer'], {scheduling:'cooperative'});
+    sync(queue, ptr(0), check);
+  };
 })();

@@ -31,6 +31,8 @@ if (
 ):
     raise RuntimeError("invalid_native_runtime")
 source += "globalThis.WECHAT_NATIVE_SUPPORT=" + json.dumps(str(app / "Contents/Frameworks" / support)) + ";\n"
+source += (package / "default-login.js").read_text(encoding="utf-8") + "\n"
+source += (package / "channels-confirm-login.js").read_text(encoding="utf-8") + "\n"
 source += (package / "native-agent.js").read_text(encoding="utf-8")
 endpoint = "127.0.0.1:" + str(config["interaction"]["port"])
 session = device = script = child = None
@@ -111,6 +113,14 @@ try:
         try:
             if request["method"] == "status":
                 result = script.exports_sync.status()
+            elif request["method"] == "armChannelsLogin":
+                result = script.exports_sync.arm_channels_login(
+                    request["params"]["operationId"], request["params"]["nonceDigest"]
+                )
+            elif request["method"] == "loginSaved":
+                result = script.exports_sync.login_saved()
+            elif request["method"] == "openChannelsPublisher":
+                result = script.exports_sync.open_channels_publisher()
             elif request["method"] == "probeTextProcessor":
                 result = script.exports_sync.probe_text_processor()
             elif request["method"] == "prepareText":

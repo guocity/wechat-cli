@@ -14,9 +14,15 @@
     const dialogs = [...document.querySelectorAll('[role=dialog],.weui-desktop-dialog__wrp')].filter(visible);
     let state = window.__wechatCliChannels;
     const linkComponent = [...document.querySelectorAll('.post-with-link')].find(e=>e.__vue__?.$options.methods?.parseLink)?.__vue__;
+    const postView=[...document.querySelectorAll('.post-create-wrap')].find(e=>e.__vue__?.postValidState)?.__vue__;
+    const mediaView=[...document.querySelectorAll('.post-edit-wrap')].find(e=>Array.isArray(e.__vue__?.fileList))?.__vue__;
+    // The button DOM can remain enabled while its upload is still starting.
+    // Use the page's actual validation and server-upload completion as well.
+    const ready=()=>!disabled(publish)&&(!postView||postView.postValidState.canPost===true)&&
+      (!mediaView||(mediaView.fileList.length===1&&mediaView.fileList[0].status==='done'));
     const snapshot = () => ({source:'wechat_embedded_browser', path:location.pathname,
-      sessionId:state?.id || null, status:state?.consumed ? 'submission_requested' : dialogs.length ? 'action_required' : state?.attached ? (disabled(publish) ? 'processing' : 'ready') : state ? 'receiving' : 'empty',
-      publishEnabled:!disabled(publish), blockedByDialog:dialogs.length > 0,
+      sessionId:state?.id || null, status:state?.consumed ? 'submission_requested' : dialogs.length ? 'action_required' : state?.attached ? (!ready() ? 'processing' : 'ready') : state ? 'receiving' : 'empty',
+      publishEnabled:ready(), blockedByDialog:dialogs.length > 0,
       receivedBytes:state?.bytes || 0,
       settings:{description:editor.innerText, title:title.value,
         location:document.querySelectorAll('.position-display')[0]?.innerText?.trim() || '',
@@ -50,6 +56,10 @@
       if (dialogs.length) throw Error('channels_dialog_open');
       editor.textContent = command.description;
       editor.dispatchEvent(new InputEvent('input', {bubbles:true, inputType:'insertText', data:command.description}));
+      // This shipped editor publishes its model over an event bus rather than
+      // a DOM input listener. Use its normal change handler after setting text.
+      const desc=[...document.querySelectorAll('.post-desc-box')].find(e=>e.__vue__?.$refs?.inputEditor===editor)?.__vue__;
+      desc?.updateDescData?.();
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;
       setter.call(title, command.title); title.dispatchEvent(new Event('input',{bubbles:true}));
       title.dispatchEvent(new Event('change',{bubbles:true}));
@@ -60,12 +70,17 @@
       upload.dispatchEvent(new Event('change', {bubbles:true}));
     } else if (command.action === 'post') {
       if (linkComponent?.linkError || linkComponent?.isParsing) throw Error('channels_link_not_ready');
-      if (!state.attached || disabled(publish)) throw Error('channels_upload_not_ready');
+      if (!state.attached || !ready()) throw Error('channels_upload_not_ready');
       if (dialogs.length) throw Error('channels_dialog_open');
       // Consume before clicking. Never repeat an uncertain submission, even with another API key.
       state.consumed = true;
       publish.click();
     } else throw Error('channels_invalid_action');
     return JSON.stringify(snapshot());
-  } catch (error) { return JSON.stringify({error:String(error.message || error)}); }
+  } catch (error) {
+    const message=String(error.message || error);
+    // The portal deliberately aborts its parent bootstrap while replacing the iframe.
+    const initializing=CHANNELS_COMMAND.action==='status'&&message==='此报错可以忽略，iframe主动中断主应用代码在子应用运行';
+    return JSON.stringify({error:initializing?'channels_form_changed':message});
+  }
 })()

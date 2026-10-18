@@ -290,10 +290,12 @@ or proxy is needed. See [setup, usage and current limits](docs/channels-playback
 
 The local API now provides `/api/channels/compose`, `/api/channels/post`,
 `/api/channels/publish`, and read-only `/api/channels/status`. It reuses the
-prepared Channels research app and the publishing page already open inside
-WeChat. No separate browser login is needed. MP4 limits are 256 MiB from a local `videoPath` or 64 MiB as base64;
-submission receipts do not confirm publication. Live upload of a 203 MiB MP4 is verified;
-publication remains unverified. See [setup, examples, and limits](docs/channels-publishing.md).
+prepared Channels research app. Compose/post start the configured app, use native
+remembered-account login by default, and request the embedded composer automatically
+on the verified 4.1.15 runtime. Channels account or phone verification may still be required.
+MP4 limits are 256 MiB from a local `videoPath` or 64 MiB as base64;
+submission receipts do not confirm publication. A 208,460,041-byte MP4 upload and
+publication were verified in the Channels content list on 2026-10-17. See [setup, examples, and limits](docs/channels-publishing.md).
 
 Channels drafts also support `/api/channels/update` and `/api/channels/options`
 for description/title, location, supported links, activities, scheduling,

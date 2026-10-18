@@ -57,6 +57,8 @@ function install(module) {
     }
     nativeState.installed = true;
     liveNativeBase = module.base;
+    globalThis.WECHAT_DEFAULT_LOGIN?.install?.(liveNativeBase);
+    globalThis.WECHAT_CHANNELS_LOGIN?.install?.(liveNativeBase);
     liveEnumerationAddress = enumeration;
     liveManagerSlot = managerSlot;
     nativeState.state = 'native_ready';
@@ -223,7 +225,37 @@ let nativePendingRead=false,nativeTaskReadActive=false;
 let lastNativeFault=null;
 const observer = Process.attachModuleObserver({ onAdded: install });
 rpc.exports = {
-  disposeGui() { return globalThis.WECHAT_GUI_LIFECYCLE?.dispose?.(); },
+  armChannelsLogin(operationId,nonceDigest) { return globalThis.WECHAT_CHANNELS_LOGIN?.arm?.(operationId,nonceDigest) || {supported:false}; },
+  loginSaved() { return globalThis.WECHAT_DEFAULT_LOGIN?.request?.() || {supported:false}; },
+  openChannelsPublisher() {
+    // REA: OpenUrlInAnyThread copies the native UI service's task owner and URL.
+    if (nativeProfile.payloadSha256 !== '5f5a81c4d8b000dec1c7203738fc4dba75ce752b55874fc1b6b5869f9dfb1027')
+      throw Error('channels_native_opener_unsupported');
+    if (!accountContext().available) throw Error('native_account_not_ready');
+    const entry = liveNativeBase.add(0x4b7642c), getter=liveNativeBase.add(0x4670f10);
+    if (hexBytes(entry, 16) !== 'ffc301d1f85f03a9f65704a9f44f05a9' ||
+        hexBytes(getter, 16) !== '69ef02b029a13c912a2540a90a2500a9')
+      throw Error('channels_native_opener_signature_mismatch');
+    // Native getter 0x4670f10 copies this process-owned shared_ptr. Its global
+    // owner keeps the service alive while OpenUrlInAnyThread retains its task.
+    const service=liveNativeBase.add(0xa45df28).readPointer();
+    if (!readable(service,16)) throw Error('native_manager_unavailable');
+    const url = 'https://channels.weixin.qq.com/platform/post/create';
+    const bytes = Memory.allocUtf8String(url), value = Memory.alloc(24);
+    value.writePointer(bytes); value.add(8).writeU64(url.length);
+    value.add(16).writeU64(new UInt64('0x8000000000000000').or(url.length + 1));
+    const open = new NativeFunction(entry, 'void', ['pointer','pointer','pointer','int']);
+    return inNativeTask(() => {
+      // Keep the UTF-8 allocation alive through the deferred task callback.
+      value.writePointer(bytes);
+      open(service, ptr(0), value, 78);
+      return {opening:true, source:'wechat_native_browser'};
+    });
+  },
+  async disposeGui() {
+    await globalThis.WECHAT_CHANNELS_LOGIN?.dispose?.();
+    return globalThis.WECHAT_GUI_LIFECYCLE?.dispose?.();
+  },
   startupStatus() {
     let applicationRunning = null;
     try {
@@ -268,6 +300,8 @@ rpc.exports = {
     return { protocol: nativeState.protocol, state: nativeState.state, wechatVersion:nativeProfile.version, build:nativeProfile.build,
       installationNoticeSuppression:{installed:Boolean(globalThis.WECHAT_INSTALL_NOTICE?.installed),suppressed:globalThis.WECHAT_INSTALL_NOTICE?.suppressed??0},
       guiLifecycle:{installed:Boolean(globalThis.WECHAT_GUI_LIFECYCLE?.installed), primaryVisible:globalThis.WECHAT_GUI_LIFECYCLE?.primaryVisible??0, seen:Boolean(globalThis.WECHAT_GUI_LIFECYCLE?.seen)},
+      autoLogin:globalThis.WECHAT_DEFAULT_LOGIN?.status?.() || {supported:false},
+      channelsLogin:globalThis.WECHAT_CHANNELS_LOGIN?.status?.() || {supported:false},
       connected: accountAvailable, accountAvailable, installed: nativeState.installed,
       enumerationObserved: nativeState.enumerationObserved,
       chatCount: nativeState.chats.length, messageReadsObserved: nativeState.messageReadsObserved,

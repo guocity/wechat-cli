@@ -45,6 +45,8 @@ function channelsOptions(command, context) {
     if ('description' in command) {
       editor.textContent=command.description;
       editor.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:command.description}));
+      const desc=[...document.querySelectorAll('.post-desc-box')].find(e=>e.__vue__?.$refs?.inputEditor===editor)?.__vue__;
+      desc?.updateDescData?.();
     }
     if ('title' in command) input(title,command.title);
   } else if (command.action === 'options-link-url') {

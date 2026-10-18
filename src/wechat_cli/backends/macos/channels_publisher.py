@@ -30,6 +30,14 @@ MAX_LOCAL_VIDEO = 256 * 1024**2
 IDENTIFY = """JSON.stringify({match:typeof location!=='undefined' &&
  location.origin==='https://channels.weixin.qq.com' &&
  ['/platform/post/create','/micro/content/post/create'].includes(location.pathname)})"""
+OAUTH_IDENTIFY = """JSON.stringify(typeof location!=='undefined' &&
+ location.origin==='https://open.weixin.qq.com' && location.pathname==='/connect/qrconnect' &&
+ new URL(location.href).searchParams.get('appid')==='wx20d84d087938fd46')"""
+
+PORTAL_IDENTIFY = """JSON.stringify(typeof location!=='undefined' &&
+ location.origin==='https://channels.weixin.qq.com' &&
+ ['/platform','/platform/','/platform/home','/platform/post/list','/micro/content/post/list'].includes(location.pathname))"""
+
 ERRORS = {
     "channels_existing_draft": "Finish the existing Channels draft before starting another upload.",
     "channels_dialog_open": "Review and close the dialog in WeChat; the API does not accept agreements.",
@@ -41,7 +49,7 @@ ERRORS = {
 
 
 @contextmanager
-def publishing_page(app):
+def publishing_page(app, *, authenticate=False, authorize=None):
     import frida
 
     expected = (Path(app) / RENDERER).resolve()
@@ -78,7 +86,7 @@ def publishing_page(app):
         + (ASSETS / "channels-agent.js").read_text()
     )
     manager = frida.get_device_manager()
-    connections, matches = [], []
+    connections, matches, logins, portals = [], [], [], []
     try:
         for candidate in range(port, port + 16):
             try:
@@ -107,8 +115,41 @@ def publishing_page(app):
                 for context in rpc.workers():
                     if json.loads(rpc.evaluate(context, IDENTIFY)).get("match"):
                         matches.append((rpc, context))
+                    elif authenticate and json.loads(rpc.evaluate(context, OAUTH_IDENTIFY)):
+                        logins.append((rpc, context))
+                    elif authenticate and json.loads(rpc.evaluate(context, PORTAL_IDENTIFY)):
+                        portals.append((rpc, context))
             except Exception:
                 continue
+        if not matches and authenticate and len(portals) == 1 and not logins:
+            rpc, context = portals[0]
+            rpc.evaluate(
+                context, "location.assign('https://channels.weixin.qq.com/platform/post/create'); 'opening'"
+            )
+            raise AppError("channels_authenticating", "Opening the authenticated Channels composer", 409)
+        if not matches and authenticate and len(logins) == 1:
+            rpc, context = logins[0]
+            login_source = (ASSETS / "channels-login.js").read_text()
+            state = json.loads(rpc.evaluate(context, login_source))
+            if state.get("status") == "confirmation_ready":
+                consent = authorize(state["nonceDigest"]) if authorize else {}
+                if not consent.get("supported") or not consent.get("armed"):
+                    raise AppError(
+                        "channels_login_required", "Native Channels login confirmation is unavailable", 409
+                    )
+                state = json.loads(
+                    rpc.evaluate(
+                        context,
+                        "(()=>{const CHANNELS_LOGIN_AUTHORIZE=true;return (\n" + login_source + "\n);})()",
+                    )
+                )
+            if state.get("status") == "login_required":
+                raise AppError(
+                    "channels_login_required", "WeChat could not authorize Channels quick login", 409
+                )
+            raise AppError("channels_authenticating", "Waiting for native Channels authentication", 409)
+        if (len(logins) > 1 or len(portals) > 1) and not matches:
+            raise AppError("channels_page_ambiguous", "Multiple Channels account pages are open", 409)
         if len(matches) != 1:
             raise AppError(
                 "channels_page_not_found" if not matches else "channels_page_ambiguous",
@@ -149,6 +190,50 @@ def publishing_page(app):
                     cleanup()
                 except Exception:
                     pass
+
+
+@contextmanager
+def upload_page(backend, app):
+    """Open the embedded composer for new uploads; never replace an existing draft."""
+    from contextlib import ExitStack
+
+    deadline = time.monotonic() + 120
+    opened = False
+    operation_id = str(uuid.uuid4())
+
+    def authorize(digest):
+        return backend._request("armChannelsLogin", {"operationId": operation_id, "nonceDigest": digest})
+
+    while True:
+        stack = ExitStack()
+        try:
+            call = stack.enter_context(publishing_page(app, authenticate=True, authorize=authorize))
+            call({"action": "status"})
+        except AppError as error:
+            stack.close()
+            if error.code not in {
+                "channels_page_not_found",
+                "channels_form_changed",
+                "channels_authenticating",
+            }:
+                raise
+            if time.monotonic() >= deadline:
+                raise AppError(
+                    "channels_composer_timeout", "WeChat did not load the Channels composer", 504
+                ) from None
+            if error.code == "channels_page_not_found" and not opened:
+                open_channels_entry(backend)
+                opened = True
+            time.sleep(0.5)
+            continue
+        with stack:
+            yield call
+        return
+
+
+def open_channels_entry(backend):
+    # Fixed native Channels browser request; no Accessibility or chat-card clicks.
+    return backend._request("openChannelsPublisher")
 
 
 def decode_video(encoded):
@@ -204,7 +289,12 @@ def _operate(backend, payload, data, name, *, post, session_id, page_factory):
         raise AppError("native_control_busy", "Another Channels operation is running", 409)
     try:
         app = load_runtime(backend.directory)["app"]
-        with page_factory(app) as call:
+        page = (
+            upload_page(backend, app)
+            if data is not None and page_factory is publishing_page
+            else page_factory(app)
+        )
+        with page as call:
             if data is None:
                 return call({"action": "post", "sessionId": session_id} if post else {"action": "status"})
             session_id = str(uuid.uuid4())

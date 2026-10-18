@@ -11,12 +11,21 @@ helper and authenticated loopback Gadget; it does not change signatures or enabl
 browser debugging. Stock/ordinary prepared apps return
 `channels_native_runtime_required`. Windows does not advertise this capability.
 
-Open exactly one publishing page in that WeChat app:
-<https://channels.weixin.qq.com/platform/post/create>.
-The observed embedded-browser redirect is `/micro/content/post/create`; both
-paths are recognized. Keep the page open and finish any pre-existing draft first.
-The API currently requires this manual opening step. No validated native URL
-opening function is available.
+Compose/post automatically request the embedded publishing page through WeChat's
+native Channels opener on the verified 4.1.15 research runtime. You do not need to
+start WeChat or open a web page first: the CLI starts its configured app, invokes
+the remembered-account native login handler by default, and opens the composer.
+An existing composer is reused; a populated draft is never replaced.
+
+Channels OAuth uses the official Channels app's quick-login API in the embedded
+document. Its native login confirmation is completed for the exact Channels app
+and snsapi_login scope during that upload operation. Authentication data stays
+inside WeChat. Account/phone authorization
+can still be required by WeChat; a failed authorization returns
+`channels_login_required` instead of uploading to an unauthenticated document.
+Status and publish-existing-session calls never open another page or log in.
+The automatic opening path is restricted to the verified payload and instruction
+signatures. See [native-opening evidence](channels-publishing-native-open.md).
 
 ## Python usage
 
@@ -27,7 +36,6 @@ from wechat_cli.client import ApiClient
 from wechat_cli.core.config import data_directory
 
 client = ApiClient(data_directory(), timeout=900)
-print(client.channel_status())
 payload = {
     "videoPath": "/absolute/path/video.mp4",
     "description": "My video description #topic",
