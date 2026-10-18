@@ -1,8 +1,13 @@
 # Release notes
 
-## Unreleased
+## 0.2.5
 
-- Bundle signed Apple Silicon C++ libraries, Swift controls, and a Python-ABI-independent SILK library. macOS setup and runtime no longer compile helpers or require Xcode Command Line Tools. Maintainers rebuild assets before packaging; missing, damaged, or stale release assets are rejected.
+- Bundle signed Apple Silicon C++ libraries, Swift controls, and a Python-ABI-independent SILK library. macOS setup and runtime no longer compile helpers or require Xcode Command Line Tools.
+- Channels browser native opening, remembered-account native login hook, and embedded OAuth fast-authorization with automatic native confirmation on macOS.
+- Complete Channels video management: video listing with pagination cursors, stats aggregation, and video deletion with exact ID resolution and duplicate prevention.
+- Channels originality declaration and terms agreement automation (`--declare-original`, `--accept-originality-terms`).
+- User-facing CLI commands for Channels: `wechat-cli channels upload`, `videos`, `stats`, `delete`.
+- Dedicated REST API routes (`/api/channels/videos`, `/api/channels/stats`, `/api/channels/delete`) and Python `ApiClient` methods.
 
 ## 0.2.4
 
