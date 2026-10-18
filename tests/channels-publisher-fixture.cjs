@@ -6,6 +6,7 @@ const optionsSource = fs.readFileSync(process.argv[3], 'utf8');
 class Event { constructor(type) { this.type = type; } }
 class Input { constructor() { this._value=''; this.events=[]; this.disabled=false; }
   get value() { return this._value; } set value(v) { this._value=v; }
+  querySelectorAll() { return []; }
   getClientRects() { return [1]; } getAttribute() { return null; }
   dispatchEvent(e) { this.events.push(e.type); }
 }
@@ -72,7 +73,13 @@ assert.equal(original.checked,true);assert.equal(publish.clicks,0);
 queries['[role=dialog],.weui-desktop-dialog__wrp']=[root];
 assert.equal(call({action:'status'}).status,'action_required');
 assert.equal(call({action:'post',sessionId:id}).error,'channels_dialog_open');
-queries['[role=dialog],.weui-desktop-dialog__wrp']=[];
+root.__vue__={$options:{name:'mp-dialog'},visible:false};
+assert.equal(call({action:'status'}).status,'ready');
+assert.equal(call({action:'status'}).blockedByDialog,false);
+// The same retained wrapper must block again if the native component reopens it.
+root.__vue__.visible=true;
+assert.equal(call({action:'status'}).blockedByDialog,true);
+root.__vue__.visible=false;
 assert.equal(call({action:'post',sessionId:id}).status,'submission_requested');
 assert.equal(call({action:'post',sessionId:id}).error,'channels_submission_already_requested');
 assert.equal(publish.clicks,1);

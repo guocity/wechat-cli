@@ -253,3 +253,108 @@ def test_ambiguous_page_is_never_navigated_or_reopened(monkeypatch):
     with pytest.raises(AppError, match="multiple"):
         with publisher.upload_page(object(), "/app"):
             pytest.fail("must not yield")
+
+
+def native_page_fixture(tmp_path, monkeypatch, *, oauth=False, value=None, workers=(1,)):
+    frida = pytest.importorskip("frida")
+    from contextlib import nullcontext
+
+    app = tmp_path / "Research.app"
+    renderer = (app / publisher.RENDERER).resolve()
+    renderer.parent.mkdir(parents=True)
+    renderer.with_name(publisher.HELPER).touch()
+    renderer.with_name("g.config").write_text(
+        json.dumps(
+            {
+                "code_signing": "required",
+                "interaction": {"type": "listen", "address": "127.0.0.1", "port": 45200, "token": "a" * 64},
+            }
+        )
+    )
+    calls = []
+
+    def evaluate(context, source):
+        calls.append((context, source))
+        if source in {publisher.IDENTIFY, publisher.MANAGER_IDENTIFY}:
+            return json.dumps({"match": not oauth})
+        if source == publisher.OAUTH_IDENTIFY:
+            return json.dumps(oauth)
+        if source == publisher.PORTAL_IDENTIFY:
+            return "false"
+        return json.dumps(value)
+
+    rpc = SimpleNamespace(
+        identity=lambda: {"pid": 123, "path": str(renderer), "policy": "required"},
+        workers=lambda: list(workers),
+        evaluate=evaluate,
+    )
+    script = SimpleNamespace(exports_sync=rpc, load=lambda: None, unload=lambda: None)
+    session = SimpleNamespace(create_script=lambda _: script, detach=lambda: None)
+    manager = SimpleNamespace(
+        add_remote_device=lambda *a, **k: SimpleNamespace(attach=lambda _: session),
+        remove_remote_device=lambda _: None,
+    )
+
+    def connect(address, **kwargs):
+        if address[1] != 45200:
+            raise OSError()
+        return nullcontext()
+
+    monkeypatch.setattr(publisher, "process_snapshot", lambda: f"123 {renderer}")
+    monkeypatch.setattr(publisher.socket, "create_connection", connect)
+    monkeypatch.setattr(frida, "get_device_manager", lambda: manager)
+    return app, calls
+
+
+def test_oauth_document_transition_is_retryable_before_upload(tmp_path, monkeypatch):
+    app, _ = native_page_fixture(tmp_path, monkeypatch, oauth=True, value=True)
+    with pytest.raises(AppError) as error:
+        with publisher.publishing_page(app, authenticate=True):
+            pytest.fail("must wait for the document")
+    assert error.value.code == "channels_authenticating"
+
+
+@pytest.mark.parametrize(
+    "action,code", [("status", "channels_form_changed"), ("begin", "channels_operation_interrupted")]
+)
+def test_non_object_native_results_have_explicit_outcomes(tmp_path, monkeypatch, action, code):
+    app, _ = native_page_fixture(tmp_path, monkeypatch, value=None)
+    with publisher.publishing_page(app) as call:
+        with pytest.raises(AppError) as error:
+            call({"action": action})
+    assert error.value.code == code
+
+
+def test_multiple_management_views_reuse_one_without_navigating(tmp_path, monkeypatch):
+    app, calls = native_page_fixture(tmp_path, monkeypatch, value={"status": "ready"}, workers=(1, 2))
+    with publisher.publishing_page(app, target="manager") as call:
+        assert call({"action": "status"})["status"] == "ready"
+    assert calls[-1][0] == 1
+    assert all("location.assign" not in source for _, source in calls)
+
+
+@pytest.mark.parametrize("accept", [False, True])
+def test_originality_terms_require_explicit_acceptance(monkeypatch, accept):
+    calls = []
+    blocked = [True]
+    monkeypatch.setattr(publisher.time, "sleep", lambda _: None)
+
+    def call(command):
+        calls.append(command)
+        if command["action"] == "options-original-confirm":
+            assert command["acceptTerms"] is True
+            blocked[0] = False
+        return {
+            "blockedByDialog": blocked[0],
+            "status": "action_required" if blocked[0] else "ready",
+            "settings": {"declareOriginal": True},
+        }
+
+    result = publisher.apply_settings(
+        call,
+        "session",
+        {"options": {"declareOriginal": True, "acceptOriginalityTerms": accept, "location": None}},
+    )
+    assert any(c["action"] == "options-original-confirm" for c in calls) is accept
+    assert result["blockedByDialog"] is not accept
+    assert all(c["action"] != "post" for c in calls)

@@ -119,8 +119,10 @@ try:
                 )
             elif request["method"] == "loginSaved":
                 result = script.exports_sync.login_saved()
+            elif request["method"] == "openChannelsManager":
+                result = script.exports_sync.open_channels_publisher("list")
             elif request["method"] == "openChannelsPublisher":
-                result = script.exports_sync.open_channels_publisher()
+                result = script.exports_sync.open_channels_publisher("create")
             elif request["method"] == "probeTextProcessor":
                 result = script.exports_sync.probe_text_processor()
             elif request["method"] == "prepareText":
@@ -182,7 +184,12 @@ try:
             # and never logged with chat/secret values.
             if isinstance(error, frida.core.RPCException):
                 description = str(error).split("\n")[0]
-                if request["method"] == "prepareVoice" or description.startswith(
+                if request["method"] in {
+                    "prepareVoice",
+                    "openChannelsPublisher",
+                    "openChannelsManager",
+                    "armChannelsLogin",
+                } or description.startswith(
                     (
                         "Error: access violation",
                         "Error: invalid address",
@@ -199,6 +206,9 @@ try:
             code = "native_read_failed"
             if isinstance(error, frida.core.RPCException):
                 for known in [
+                    "invalid_channels_destination",
+                    "channels_native_opener_unsupported",
+                    "channels_native_opener_signature_mismatch",
                     "native_feature_unavailable",
                     "native_invalid_media_id",
                     "native_migration_busy",

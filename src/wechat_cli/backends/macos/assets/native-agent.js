@@ -227,7 +227,9 @@ const observer = Process.attachModuleObserver({ onAdded: install });
 rpc.exports = {
   armChannelsLogin(operationId,nonceDigest) { return globalThis.WECHAT_CHANNELS_LOGIN?.arm?.(operationId,nonceDigest) || {supported:false}; },
   loginSaved() { return globalThis.WECHAT_DEFAULT_LOGIN?.request?.() || {supported:false}; },
-  openChannelsPublisher() {
+  openChannelsPublisher(destination) {
+    destination = destination ?? "create";
+    if (!["create","list"].includes(destination)) throw Error("invalid_channels_destination");
     // REA: OpenUrlInAnyThread copies the native UI service's task owner and URL.
     if (nativeProfile.payloadSha256 !== '5f5a81c4d8b000dec1c7203738fc4dba75ce752b55874fc1b6b5869f9dfb1027')
       throw Error('channels_native_opener_unsupported');
@@ -240,7 +242,7 @@ rpc.exports = {
     // owner keeps the service alive while OpenUrlInAnyThread retains its task.
     const service=liveNativeBase.add(0xa45df28).readPointer();
     if (!readable(service,16)) throw Error('native_manager_unavailable');
-    const url = 'https://channels.weixin.qq.com/platform/post/create';
+    const url = 'https://channels.weixin.qq.com/platform/post/' + destination;
     const bytes = Memory.allocUtf8String(url), value = Memory.alloc(24);
     value.writePointer(bytes); value.add(8).writeU64(url.length);
     value.add(16).writeU64(new UInt64('0x8000000000000000').or(url.length + 1));

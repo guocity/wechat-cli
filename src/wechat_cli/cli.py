@@ -74,6 +74,36 @@ def parser():
     messages = add("messages", "Read recent messages, newest first")
     messages.add_argument("chat_id")
     messages.add_argument("--limit", type=int, choices=range(1, 101), default=50, metavar="1..100")
+    channels = add("channels", "List, inspect, or delete your Channels videos (macOS)")
+    channel_commands = channels.add_subparsers(dest="channel_command", required=True)
+    videos = channel_commands.add_parser("videos", help="List your Channels videos", parents=[common])
+    videos.add_argument("--limit", type=int, choices=range(1, 101), default=20, metavar="1..100")
+    videos.add_argument("--cursor", help="Opaque cursor from the previous videos response")
+    channel_commands.add_parser("stats", help="Read video count and loaded-page statistics", parents=[common])
+    delete = channel_commands.add_parser(
+        "delete", help="Delete a Channels video by exact ID", parents=[common]
+    )
+    delete.add_argument("video_id")
+    delete.add_argument("--key", help="Reuse this idempotency key for retries (retained for 24 hours)")
+    upload = channel_commands.add_parser("upload", help="Upload a Channels video", parents=[common])
+    upload.add_argument("video", type=Path)
+    upload.add_argument("--title", default="")
+    upload.add_argument("--description", default="")
+    upload.add_argument(
+        "--declare-original",
+        action="store_true",
+        default=None,
+        help="Request 声明原创 for your original video",
+    )
+    upload.add_argument(
+        "--accept-originality-terms",
+        action="store_true",
+        default=None,
+        help="Explicitly accept 《原创声明须知》 and 《使用条款》; requires --declare-original",
+    )
+    upload.add_argument("--post", action="store_true", help="Publish once upload and settings are ready")
+    upload.add_argument("--wait-seconds", type=int, choices=range(0, 121), default=120, metavar="0..120")
+    upload.add_argument("--key", help="Reuse this idempotency key for retries")
     send = add("send", "Send a text message")
     send.add_argument("chat_id")
     send.add_argument("text")
@@ -186,9 +216,15 @@ def run(args):
         return client.moments(1000 if args.all else args.limit)
     if command == "messages":
         return client.messages(args.chat_id, args.limit)
+    if command == "channels" and args.channel_command == "videos":
+        return client.list_channel_videos(limit=args.limit, cursor=args.cursor)
+    if command == "channels" and args.channel_command == "stats":
+        return client.channel_stats()
     key = getattr(args, "key", None)
     mutation = (
         command in {"send", "send-file", "send-voice", "transcribe", "download", "moment", "moment-action"}
+        or command == "channels"
+        and args.channel_command in {"delete", "upload"}
         or command == "api"
         and args.method == "POST"
     )
@@ -202,6 +238,22 @@ def run(args):
         )
     if command == "send":
         return client.send(args.chat_id, args.text, idempotency_key=key)
+    if command == "channels" and args.channel_command == "delete":
+        return client.delete_channel_video(args.video_id, idempotency_key=key)
+    if command == "channels" and args.channel_command == "upload":
+        client.timeout = 900
+        payload = {
+            "videoPath": str(args.video.expanduser().resolve()),
+            "title": args.title,
+            "description": args.description,
+            "waitSeconds": args.wait_seconds,
+        }
+        if args.declare_original is not None or args.accept_originality_terms is not None:
+            payload["options"] = {
+                "declareOriginal": args.declare_original,
+                "acceptOriginalityTerms": args.accept_originality_terms,
+            }
+        return client.compose_channel(payload, idempotency_key=key, post=args.post)
     if command == "moment":
         files = args.image or [args.video]
         if len(files) > 9 or sum(path.stat().st_size for path in files) > 64 * 1024**2:

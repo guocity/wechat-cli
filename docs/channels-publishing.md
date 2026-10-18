@@ -91,7 +91,7 @@ Status values are `empty`, `receiving`, `processing`, `ready`, and
 `acknowledgedByServer: false`. A `submission_requested` result means only that
 Publish was clicked once. It does **not** confirm publication or supply a public
 post ID. Inspect WeChat for moderation, server errors, originality prompts, or
-other required interaction. The API never accepts agreements or retries a final
+other required interaction. The API only accepts originality terms with explicit consent and never retries a final
 click automatically. After an uncertain result, inspect the page before using
 another key. API keys cannot bypass the page's consumed-session guard.
 
@@ -170,6 +170,7 @@ print(result["settings"])
 | `activityQuery` | Optional activity search |
 | `scheduleAt` | ISO 8601 with explicit timezone and whole minutes, e.g. `2026-10-17T12:00:00-04:00`; or `"immediate"` |
 | `declareOriginal` | Boolean: request the 声明原创 checkbox state |
+| `acceptOriginalityTerms` | Explicit acceptance of 《原创声明须知》 and 《使用条款》; requires `declareOriginal: true` |
 | `videoLabel` | Exact label from `channel_options(session, "videoLabel", …)`; `""` means No label needed |
 
 Scheduling obeys the native date-picker's account-specific minimum/maximum times;
@@ -186,17 +187,26 @@ names are rejected unless the full returned `value`, including address/detail,
 selects exactly one result.
 
 Originality can open the **原创权益** dialog containing **原创声明须知** and **使用条款**.
-The API does not accept these agreements. It reports `status: "action_required"`
-and `blockedByDialog: true`; review and complete or cancel that dialog in WeChat.
-The checked checkbox alone is not proof that its terms step has been completed.
-A direct `/post` call stops without clicking Publish when that dialog is present.
-After completing it manually, use status, then publish the existing session.
+`declareOriginal` alone leaves that confirmation open and returns `action_required`.
+After explicitly consenting to those terms, supply `acceptOriginalityTerms: true`
+alongside `declareOriginal: true`. The script confirms only that exact originality
+dialog; it does not accept unrelated terms or join monetization programs.
+
+The CLI exposes the same explicit controls:
+
+```sh
+uvx --from /absolute/path/to/wechat-cli --with-editable /absolute/path/to/wechat-cli wechat-cli channels upload ~/Downloads/paris.mp4 --title Paris --description Paris --declare-original --accept-originality-terms --post --key paris-original-001
+```
+
+Omit `--accept-originality-terms` to prepare the upload and leave terms unaccepted.
+Reuse the existing session through `/api/channels/update` and `/api/channels/publish`
+after approval; do not upload a second copy to finish an existing declaration.
 
 `nativeAction` on `/channels/update` can open `cover`, `topic`, or `mention` for
 native editing. Cover cropping, contact selection, and extra details requested
 by specific video labels remain interactive in WeChat. Complete/close their
-native controls before another API change. No agreement checkbox is exposed as
-an automatic action.
+native controls before another API change. Only the specifically authorized originality confirmation is supported; other
+agreements remain interactive.
 
 Settings responses include current `settings` and link `validation`. Updates are
 sequential, not transactional: if a later option fails, earlier field changes
@@ -209,3 +219,18 @@ selection, a timezone-aware scheduled timestamp and restoration to immediate,
 and opening/cancelling the originality terms dialog. No agreement was accepted
 and no post was published. Location changes, valid external link parsing, and
 label-specific detail forms are not covered by that live check.
+
+### Originality publication verification
+
+The Paris replacement was published through the local editable package using only
+`uvx wechat-cli` on 2026-10-18, after explicit approval of the originality terms.
+The refreshed account list returned its new video ID, matching file size
+(12,068,177 bytes), and `originalInfo.isDeclared = 1`. The original upload had
+already been deleted and its absence verified.
+
+`channels videos` reports `declaredOriginal` from `originalInfo.isDeclared`;
+`originalityBadgeVisible` separately reports the page's `showOriginal` value,
+and `originalityAuditStatus` preserves the platform audit flag. A declaration
+can be recorded while the badge remains hidden during originality review.
+Closed `mp-dialog` wrappers can retain DOM layout, so publisher readiness also
+checks the native component's visibility prop.

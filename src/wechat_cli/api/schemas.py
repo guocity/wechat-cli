@@ -135,7 +135,14 @@ class ChannelOptions(Empty):
     activityQuery: str | None = Field(default=None, max_length=200)
     scheduleAt: str | None = Field(default=None, max_length=64)
     declareOriginal: bool | None = None
+    acceptOriginalityTerms: bool | None = None
     videoLabel: str | None = Field(default=None, max_length=200)
+
+    @model_validator(mode="after")
+    def original_terms_require_declaration(self):
+        if self.acceptOriginalityTerms is True and self.declareOriginal is not True:
+            raise ValueError("acceptOriginalityTerms requires declareOriginal=true")
+        return self
 
     @field_validator("scheduleAt")
     @classmethod
@@ -175,6 +182,36 @@ class ChannelVideoInput(Empty):
 
 class ChannelPublishInput(Empty):
     sessionId: str = Field(pattern=r"^[a-f0-9-]{36}$")
+
+
+class ChannelVideosQuery(Empty):
+    limit: int = Field(default=20, ge=1, le=100)
+    cursor: str | None = Field(default=None, min_length=1, max_length=4096)
+
+    @field_validator("limit", mode="before")
+    @classmethod
+    def canonical_limit(cls, value):
+        if isinstance(value, str) and re.fullmatch(r"[1-9][0-9]{0,2}", value):
+            return int(value)
+        return value
+
+    @field_validator("cursor")
+    @classmethod
+    def valid_cursor(cls, value):
+        if value is not None and re.search(r"[\x00-\x1f\x7f]", value):
+            raise ValueError("Cursor cannot contain control characters")
+        return value
+
+
+class ChannelDeleteInput(Empty):
+    videoId: str = Field(min_length=1, max_length=1024)
+
+    @field_validator("videoId")
+    @classmethod
+    def valid_video_id(cls, value):
+        if not value.strip() or re.search(r"[\x00-\x1f\x7f]", value):
+            raise ValueError("Use a nonempty video ID without control characters")
+        return value
 
 
 class ChannelUpdateInput(ChannelPublishInput):

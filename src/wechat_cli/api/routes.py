@@ -13,9 +13,11 @@ from wechat_cli.core.services import WeChatService, transcript
 
 from .schemas import (
     ChannelChoicesInput,
+    ChannelDeleteInput,
     ChannelPublishInput,
     ChannelUpdateInput,
     ChannelVideoInput,
+    ChannelVideosQuery,
     Empty,
     FileInput,
     HistoryQuery,
@@ -52,6 +54,27 @@ def channels_backend(svc):
 @router.get("/channels/status")
 def channel_status(svc: Service, query: Annotated[Empty, Query()]):
     return channels_backend(svc).channel_status()
+
+
+@router.get("/channels/videos")
+def channel_videos(svc: Service, query: Annotated[ChannelVideosQuery, Query()]):
+    return channels_backend(svc).list_channel_videos(limit=query.limit, cursor=query.cursor)
+
+
+@router.get("/channels/stats")
+def channel_stats(svc: Service, query: Annotated[Empty, Query()]):
+    return channels_backend(svc).channel_stats()
+
+
+@router.post("/channels/delete")
+def channel_delete(svc: Service, payload: ChannelDeleteInput, key: Key = None):
+    backend = channels_backend(svc)
+    return svc.once(
+        "/api/channels/delete",
+        key,
+        payload.model_dump(),
+        lambda: backend.delete_channel_video(payload.videoId),
+    )
 
 
 @router.post("/channels/compose")

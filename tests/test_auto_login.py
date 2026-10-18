@@ -47,3 +47,21 @@ def test_unverified_native_version_does_not_attempt_login(tmp_path):
     backend.status = lambda: {"accountAvailable": False}
     backend._request = lambda action: {"supported": False}
     backend.auto_login()
+
+
+def test_cold_start_waits_for_native_image_before_requesting_saved_login(tmp_path, monkeypatch):
+    backend = native_backend(tmp_path)
+    states = iter(
+        [
+            {"state": "waiting_for_module", "accountAvailable": False},
+            {"state": "waiting_for_live_image", "accountAvailable": False},
+            {"state": "native_ready", "accountAvailable": False},
+            {"state": "native_ready", "accountAvailable": True},
+        ]
+    )
+    backend.status = lambda: next(states)
+    calls = []
+    backend._request = lambda action: calls.append(action) or {"supported": True}
+    monkeypatch.setattr("wechat_cli.backends.macos.backend.time.sleep", lambda _: None)
+    backend.auto_login()
+    assert calls == ["loginSaved"]

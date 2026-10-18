@@ -72,6 +72,20 @@ class ApiClient:
     def channel_status(self):
         return self.request("/api/channels/status")
 
+    def list_channel_videos(self, limit=20, cursor=None):
+        query = {"limit": limit}
+        if cursor is not None:
+            query["cursor"] = cursor
+        return self.request("/api/channels/videos?" + urlencode(query))
+
+    def channel_stats(self):
+        return self.request("/api/channels/stats")
+
+    def delete_channel_video(self, video_id, *, idempotency_key):
+        return self.request(
+            "/api/channels/delete", method="POST", data={"videoId": video_id}, key=idempotency_key
+        )
+
     def update_channel(self, session_id, *, idempotency_key, **settings):
         return self.request(
             "/api/channels/update",

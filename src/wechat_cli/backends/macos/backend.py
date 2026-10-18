@@ -50,8 +50,19 @@ class MacOSBackend:
         self.auto_login()
 
     def auto_login(self):
-        if self.status().get("accountAvailable"):
+        status = self.status()
+        if status.get("accountAvailable"):
             return
+        # Gadget resumes before the protected native image finishes loading.
+        # An uninstalled login hook in that interval is not an unsupported app.
+        deadline = time.monotonic() + 30
+        while status.get("state") in {"waiting_for_module", "waiting_for_live_image"}:
+            if time.monotonic() >= deadline:
+                return
+            time.sleep(0.25)
+            status = self.status()
+            if status.get("accountAvailable"):
+                return
         result = self._request("loginSaved")
         if not result.get("supported") or result.get("savedAccountAvailable") is False:
             return
@@ -207,6 +218,21 @@ class MacOSBackend:
         from .channels_publisher import operate
 
         return operate(self)
+
+    def list_channel_videos(self, limit=20, cursor=None):
+        from .channels_manager import list_videos
+
+        return list_videos(self, limit=limit, cursor=cursor)
+
+    def channel_stats(self):
+        from .channels_manager import stats
+
+        return stats(self)
+
+    def delete_channel_video(self, video_id):
+        from .channels_manager import delete_video
+
+        return delete_video(self, video_id)
 
     def update_channel(self, payload, *, choices=False):
         from .channels_publisher import edit

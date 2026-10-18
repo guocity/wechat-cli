@@ -300,3 +300,8 @@ publication were verified in the Channels content list on 2026-10-17. See [setup
 Channels drafts also support `/api/channels/update` and `/api/channels/options`
 for description/title, location, supported links, activities, scheduling,
 originality and video labels. Originality terms remain a native user review step.
+
+Channels management commands provide `channels videos`, `channels stats`, and
+`channels delete VIDEO_ID --key KEY`, with matching local API routes and Python
+client methods. See [video listing, statistics, and deletion](docs/channels-management.md)
+for pagination and retry rules.

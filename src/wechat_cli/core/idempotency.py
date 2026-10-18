@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import logging
 import sqlite3
 import threading
 import time
@@ -65,6 +66,7 @@ class Idempotency:
                 db.commit()
                 raise
             except Exception:
+                logging.getLogger(__name__).exception("Local operation interrupted: %s", route)
                 # Leave the durable intent unresolved: retry must never send again.
                 raise AppError(
                     "native_send_outcome_unknown",

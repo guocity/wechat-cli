@@ -38,6 +38,10 @@ PORTAL_IDENTIFY = """JSON.stringify(typeof location!=='undefined' &&
  location.origin==='https://channels.weixin.qq.com' &&
  ['/platform','/platform/','/platform/home','/platform/post/list','/micro/content/post/list'].includes(location.pathname))"""
 
+MANAGER_IDENTIFY = """JSON.stringify({match:typeof location!=='undefined' &&
+ location.origin==='https://channels.weixin.qq.com' &&
+ ['/platform/post/list','/micro/content/post/list'].includes(location.pathname)})"""
+
 ERRORS = {
     "channels_existing_draft": "Finish the existing Channels draft before starting another upload.",
     "channels_dialog_open": "Review and close the dialog in WeChat; the API does not accept agreements.",
@@ -49,7 +53,9 @@ ERRORS = {
 
 
 @contextmanager
-def publishing_page(app, *, authenticate=False, authorize=None):
+def publishing_page(app, *, authenticate=False, authorize=None, target="publisher"):
+    if target not in {"publisher", "manager"}:
+        raise ValueError("unknown_channels_page")
     import frida
 
     expected = (Path(app) / RENDERER).resolve()
@@ -113,7 +119,8 @@ def publishing_page(app, *, authenticate=False, authorize=None):
                 ):
                     continue
                 for context in rpc.workers():
-                    if json.loads(rpc.evaluate(context, IDENTIFY)).get("match"):
+                    identify = IDENTIFY if target == "publisher" else MANAGER_IDENTIFY
+                    if json.loads(rpc.evaluate(context, identify)).get("match"):
                         matches.append((rpc, context))
                     elif authenticate and json.loads(rpc.evaluate(context, OAUTH_IDENTIFY)):
                         logins.append((rpc, context))
@@ -123,14 +130,20 @@ def publishing_page(app, *, authenticate=False, authorize=None):
                 continue
         if not matches and authenticate and len(portals) == 1 and not logins:
             rpc, context = portals[0]
+            destination = "create" if target == "publisher" else "list"
             rpc.evaluate(
-                context, "location.assign('https://channels.weixin.qq.com/platform/post/create'); 'opening'"
+                context,
+                "location.assign('https://channels.weixin.qq.com/platform/post/"
+                + destination
+                + "'); 'opening'",
             )
             raise AppError("channels_authenticating", "Opening the authenticated Channels composer", 409)
         if not matches and authenticate and len(logins) == 1:
             rpc, context = logins[0]
             login_source = (ASSETS / "channels-login.js").read_text()
             state = json.loads(rpc.evaluate(context, login_source))
+            if not isinstance(state, dict):
+                raise AppError("channels_authenticating", "Waiting for the Channels login document", 409)
             if state.get("status") == "confirmation_ready":
                 consent = authorize(state["nonceDigest"]) if authorize else {}
                 if not consent.get("supported") or not consent.get("armed"):
@@ -143,6 +156,8 @@ def publishing_page(app, *, authenticate=False, authorize=None):
                         "(()=>{const CHANNELS_LOGIN_AUTHORIZE=true;return (\n" + login_source + "\n);})()",
                     )
                 )
+            if not isinstance(state, dict):
+                raise AppError("channels_authenticating", "Waiting for the Channels login redirect", 409)
             if state.get("status") == "login_required":
                 raise AppError(
                     "channels_login_required", "WeChat could not authorize Channels quick login", 409
@@ -150,6 +165,10 @@ def publishing_page(app, *, authenticate=False, authorize=None):
             raise AppError("channels_authenticating", "Waiting for native Channels authentication", 409)
         if (len(logins) > 1 or len(portals) > 1) and not matches:
             raise AppError("channels_page_ambiguous", "Multiple Channels account pages are open", 409)
+        # Management views are reusable; video mutations bind to an exact row ID.
+        # Unlike composers, multiple list views do not imply competing drafts.
+        if target == "manager" and matches:
+            matches = matches[:1]
         if len(matches) != 1:
             raise AppError(
                 "channels_page_not_found" if not matches else "channels_page_ambiguous",
@@ -160,11 +179,10 @@ def publishing_page(app, *, authenticate=False, authorize=None):
 
         def call(command):
             source = "const CHANNELS_COMMAND=" + json.dumps(command) + ";\n"
-            source += (ASSETS / "channels-options.js").read_text() + "\n"
+            source += (ASSETS / "channels-options.js").read_text() + "\n" if target == "publisher" else ""
+            asset = "channels-publisher.js" if target == "publisher" else "channels-manager.js"
             # Each evaluation gets a lexical wrapper so const declarations never collide.
-            source = (
-                "(()=>{" + source + "return (\n" + (ASSETS / "channels-publisher.js").read_text() + "\n)})()"
-            )
+            source = "(()=>{" + source + "return (\n" + (ASSETS / asset).read_text() + "\n)})()"
             try:
                 result = json.loads(rpc.evaluate(context, source))
             except Exception:
@@ -173,6 +191,13 @@ def publishing_page(app, *, authenticate=False, authorize=None):
                     "Channels operation was interrupted. Inspect WeChat before starting another request.",
                     502,
                 ) from None
+            if not isinstance(result, dict):
+                code = (
+                    "channels_form_changed"
+                    if command.get("action") == "status"
+                    else "channels_operation_interrupted"
+                )
+                raise AppError(code, "The Channels document changed during evaluation", 409)
             if result.get("error"):
                 code = result["error"]
                 raise AppError(code, ERRORS.get(code, code.replace("_", " ")), 409)
@@ -193,7 +218,7 @@ def publishing_page(app, *, authenticate=False, authorize=None):
 
 
 @contextmanager
-def upload_page(backend, app):
+def upload_page(backend, app, *, target="publisher"):
     """Open the embedded composer for new uploads; never replace an existing draft."""
     from contextlib import ExitStack
 
@@ -207,7 +232,10 @@ def upload_page(backend, app):
     while True:
         stack = ExitStack()
         try:
-            call = stack.enter_context(publishing_page(app, authenticate=True, authorize=authorize))
+            kwargs = {"authenticate": True, "authorize": authorize}
+            if target != "publisher":
+                kwargs["target"] = target
+            call = stack.enter_context(publishing_page(app, **kwargs))
             call({"action": "status"})
         except AppError as error:
             stack.close()
@@ -222,7 +250,10 @@ def upload_page(backend, app):
                     "channels_composer_timeout", "WeChat did not load the Channels composer", 504
                 ) from None
             if error.code == "channels_page_not_found" and not opened:
-                open_channels_entry(backend)
+                if target == "manager":
+                    backend._request("openChannelsManager")
+                else:
+                    open_channels_entry(backend)
                 opened = True
             time.sleep(0.5)
             continue
@@ -333,7 +364,13 @@ def _operate(backend, payload, data, name, *, post, session_id, page_factory):
 
 
 def apply_settings(call, session_id, payload):
-    if call({"action": "status"}).get("blockedByDialog"):
+    initial = call({"action": "status"})
+    requested_options = {k: v for k, v in (payload.get("options") or {}).items() if v is not None}
+    original_only = (
+        requested_options.get("declareOriginal") is True
+        and set(requested_options) <= {"declareOriginal", "acceptOriginalityTerms"}
+    ) and not any(payload.get(k) is not None for k in ("description", "title", "nativeAction"))
+    if initial.get("blockedByDialog") and not original_only:
         raise AppError("channels_dialog_open", ERRORS["channels_dialog_open"], 409)
 
     def command(action, **extra):
@@ -390,9 +427,30 @@ def apply_settings(call, session_id, payload):
         command("schedule-mode", enabled=schedule != "immediate")
         if schedule != "immediate":
             command("schedule-time", value=schedule)
-    # Do this last: it may open terms that must be reviewed in the native page.
+    # Original content and acceptance of its terms require separate explicit options.
+    # JavaScript validates the dialog text and never confirms unrelated agreements.
     if options.get("declareOriginal") is not None:
-        command("original", value=options["declareOriginal"])
+        result = command("original", value=options["declareOriginal"])
+        if (
+            options["declareOriginal"] is True
+            and options.get("acceptOriginalityTerms") is True
+            and result.get("blockedByDialog")
+        ):
+            deadline = time.monotonic() + 10
+            while result.get("blockedByDialog"):
+                if time.monotonic() >= deadline:
+                    raise AppError(
+                        "channels_originality_not_ready",
+                        "WeChat did not finish the original-content declaration",
+                        409,
+                    )
+                try:
+                    command("original-confirm", value=True, acceptTerms=True)
+                except AppError as error:
+                    if error.code != "channels_originality_not_ready":
+                        raise
+                time.sleep(0.2)
+                result = call({"action": "status"})
     if payload.get("nativeAction"):
         command("native", target=payload["nativeAction"])
     return call({"action": "status"})

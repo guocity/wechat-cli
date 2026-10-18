@@ -1,4 +1,4 @@
-// Page controls only; no direct store mutation and no agreement acceptance.
+// Page controls only. Originality confirmation requires an explicit original-content request; unrelated agreements are never accepted.
 function channelsOptions(command, context) {
   const {visible, unique, state, editor, title, snapshot} = context;
   const all = selector => [...document.querySelectorAll(selector)];
@@ -12,6 +12,10 @@ function channelsOptions(command, context) {
   };
   if (!state || state.id !== command.sessionId) throw Error('channels_session_not_found');
   if (state.consumed) throw Error('channels_submission_already_requested');
+  const originalDialog = d => {
+    const value=d.innerText||d.textContent||'';
+    return ['原创权益','原创声明须知','使用条款','我已阅读并同意'].every(t=>value.includes(t));
+  };
   const kind = command.kind;
   const roots = {location:'.post-position-wrap',activity:'.post-activity-wrap',link:'.post-link-wrap',videoLabel:'.mark-tag-select'};
   const displays = {location:'.position-display-wrap',activity:'.activity-display-wrap',link:'.link-display-wrap',videoLabel:'.select-display'};
@@ -62,9 +66,41 @@ function channelsOptions(command, context) {
     // The observed date-picker emits input(milliseconds) to its normal v-model listener.
     picker.$emit('input',timestamp);
   } else if (command.action === 'options-original') {
+    const dialogs=all('[role=dialog],.weui-desktop-dialog__wrp').filter(visible);
+    if(dialogs.length&&(command.value!==true||dialogs.length!==1||!originalDialog(dialogs[0])))throw Error('channels_dialog_open');
+    state.originalityRequested=command.value===true;
     const checkbox=one('.declare-original-checkbox input[type=checkbox]');
     if (checkbox.checked !== command.value) checkbox.click();
-    // Any resulting terms dialog is left for the user; never click its agreement checkbox.
+  } else if (command.action === 'options-original-confirm') {
+    if(command.value!==true||state.originalityRequested!==true||command.acceptTerms!==true)throw Error('channels_originality_not_requested');
+    const dialogs=all('[role=dialog],.weui-desktop-dialog__wrp').filter(visible);
+    if(dialogs.length!==1||!originalDialog(dialogs[0]))throw Error('channels_dialog_open');
+    const dialog=dialogs[0],terms=unique([...dialog.querySelectorAll('input[type=checkbox]')]);
+    // The shipped OriginalDeclare component owns checkProto and confirmDeclare.
+    // Its native checkbox can diverge from its controlled model during an iframe
+    // event transition; use the component's normal text/callback handlers.
+    let controller=null;
+    for(const element of all('.declare-original-dialog')){
+      if(element!==dialog&&!element.contains(dialog)&&!dialog.contains(element))continue;
+      for(let v=element.__vue__,i=0;v&&i<8;v=v.$parent,i++){
+        if(typeof v.confirmDeclare==='function'&&typeof v.checkProto==='boolean'){controller=v;break;}
+      }
+      if(controller)break;
+    }
+    if(controller){
+      if(controller.checkProto!==true){
+        const label=unique([...dialog.querySelectorAll('.protocol-text')].filter(visible));
+        label.click();return snapshot();
+      }
+      if(!terms.checked)throw Error('channels_originality_not_ready');
+      controller.confirmDeclare();
+      state.originalityConfirmed=controller.visible===false;
+    }else{
+      if(!terms.checked){terms.click();return snapshot();}
+      const confirm=unique([...dialog.querySelectorAll('button')].filter(e=>visible(e)&&text(e)==='声明原创'));
+      if(confirm.disabled||confirm.getAttribute('aria-disabled')==='true'||confirm.classList.contains('weui-desktop-btn_disabled'))throw Error('channels_originality_not_ready');
+      confirm.click();state.originalityConfirmed=!snapshot().blockedByDialog;
+    }
   } else if (command.action === 'options-native') {
     if (command.target==='cover') one('.cover-preview-wrap .vertical-cover-wrap .edit-btn').click();
     else if (command.target==='mention') unique(all('button,div,span').filter(e=>visible(e)&&e.children.length===0&&text(e)==='@视频号')).click();

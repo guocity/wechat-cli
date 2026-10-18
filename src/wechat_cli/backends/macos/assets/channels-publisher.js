@@ -4,7 +4,16 @@
     const paths = ['/platform/post/create', '/micro/content/post/create'];
     if (location.origin !== 'https://channels.weixin.qq.com' || !paths.includes(location.pathname))
       return JSON.stringify({error: 'channels_page_not_found'});
-    const visible = e => !!(e && e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden');
+    const visible = e => {
+      if (!e || !e.getClientRects().length || getComputedStyle(e).visibility === 'hidden') return false;
+      // Closed native mp-dialog wrappers can retain layout during transitions.
+      // Read their controlling visibility prop before treating them as blockers.
+      for (let node=e; node; node=node.parentElement) {
+        const view=node.__vue__;
+        if (view?.$options?.name === 'mp-dialog' && view.visible === false) return false;
+      }
+      return true;
+    };
     const unique = list => { if (list.length !== 1) throw Error('channels_form_changed'); return list[0]; };
     const editor = unique([...document.querySelectorAll('.input-editor[contenteditable]')].filter(visible));
     const title = unique([...document.querySelectorAll('input[placeholder="填写短标题有机会获得更多流量"]')].filter(visible));
@@ -24,6 +33,9 @@
       sessionId:state?.id || null, status:state?.consumed ? 'submission_requested' : dialogs.length ? 'action_required' : state?.attached ? (!ready() ? 'processing' : 'ready') : state ? 'receiving' : 'empty',
       publishEnabled:ready(), blockedByDialog:dialogs.length > 0,
       receivedBytes:state?.bytes || 0,
+      dialogs:dialogs.map(d=>({text:d.innerText?.slice(0,12000)||d.textContent?.slice(0,12000)||'',
+        checkboxes:[...d.querySelectorAll('input[type=checkbox]')].map(e=>({checked:e.checked,label:e.closest('label')?.innerText||e.parentElement?.innerText||''})),
+        buttons:[...d.querySelectorAll('button')].filter(visible).map(e=>({text:e.textContent.trim(),disabled:disabled(e)}))})),
       settings:{description:editor.innerText, title:title.value,
         location:document.querySelectorAll('.position-display')[0]?.innerText?.trim() || '',
         link:document.querySelectorAll('.link-display-wrap')[0]?.innerText?.trim() || '',
