@@ -41,6 +41,11 @@ class MessageRef(Empty):
     id: MessageId
 
 
+class DictationInput(Empty):
+    chatId: ChatId
+    timeoutSeconds: int = Field(default=30, ge=5, le=60)
+
+
 class MomentsQuery(Empty):
     limit: int = Field(default=20, ge=1, le=1000)
 

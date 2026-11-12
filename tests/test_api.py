@@ -30,6 +30,25 @@ def test_auth_before_native_access(api):
     assert raw(server, "/api/health", host="attacker.example")[0] == 403
 
 
+def test_composer_dictation_requires_authentication_and_capability(api, monkeypatch):
+    server, client, native = api
+    path = "/api/native/dictation"
+    assert raw(server, path, "POST", {"chatId": "filehelper"})[0] == 401
+    with pytest.raises(AppError) as caught:
+        client.capture_dictation("filehelper")
+    assert caught.value.code == "native_feature_unavailable"
+    monkeypatch.setattr(native, "capabilities", lambda: {"composerDictation": True})
+
+    def capture(chat_id, timeout):
+        assert timeout == 15
+        return {"source": "wechat_composer", "chatId": chat_id, "text": "Test phrase"}
+
+    monkeypatch.setattr(native, "capture_dictation", capture, raising=False)
+    assert client.capture_dictation("filehelper", 15)["text"] == "Test phrase"
+    with pytest.raises(AppError):
+        client.capture_dictation("filehelper", 61)
+
+
 @pytest.mark.parametrize(
     "query",
     [

@@ -111,13 +111,25 @@ function installMigrationHooks(){
   migrationHooksInstalled=true;
 }
 let microphoneHooksInstalled=false;
+let dictationHooksInstalled=false;
 const microphoneState={dictation:{starts:0,finishes:0,active:false},recording:{starts:0,active:false}};
 let controlledRecording=null;
+function installDictationHooks(){
+  if(dictationHooksInstalled)return;
+  const start=nativeEntry('dictationStart'),finish=nativeEntry('dictationFinish');
+  const state=microphoneState.dictation;
+  const listener=Interceptor.attach(start,{onEnter(){state.starts++;state.active=true;}});
+  try {
+    Interceptor.attach(finish,{onEnter(args){state.finishes++;state.active=false;state.finishReason=args[1].toInt32();}});
+  } catch(error) {
+    listener.detach();throw error;
+  }
+  dictationHooksInstalled=true;
+}
 function installMicrophoneHooks(){
   if(microphoneHooksInstalled)return;
-  nativeEntry('dictationStart');nativeEntry('dictationFinish');nativeEntry('recordingStart');nativeEntry('recordingSend');nativeEntry('recordingBackendStart');
-  Interceptor.attach(nativeEntry('dictationStart'),{onEnter(){microphoneState.dictation.starts++;microphoneState.dictation.active=true;}});
-  Interceptor.attach(nativeEntry('dictationFinish'),{onEnter(args){microphoneState.dictation.finishes++;microphoneState.dictation.active=false;microphoneState.dictation.finishReason=args[1].toInt32();}});
+  nativeEntry('recordingStart');nativeEntry('recordingSend');nativeEntry('recordingBackendStart');
+  installDictationHooks();
   Interceptor.attach(nativeEntry('recordingStart'),{onEnter(){microphoneState.recording.starts++;microphoneState.recording.active=true;}});
   Interceptor.attach(nativeEntry('recordingBackendStart'),{onEnter(){if(controlledRecording){microphoneState.recording.starts++;microphoneState.recording.active=true;}}});
   const entry=nativeEntry('recordingSend'),original=new NativeFunction(entry,'void',['pointer','pointer']);
@@ -300,6 +312,7 @@ rpc.exports = {
     let accountAvailable = false;
     try {accountAvailable=accountContext().available;nativeState.failure=null;} catch(error) {nativeState.failure=error.message;}
     return { protocol: nativeState.protocol, state: nativeState.state, wechatVersion:nativeProfile.version, build:nativeProfile.build, readOnly: Boolean(nativeProfile.readOnly),
+      dictationSupported: Boolean(nativeProfile.dictationStart && nativeProfile.dictationFinish),
       installationNoticeSuppression:{installed:Boolean(globalThis.WECHAT_INSTALL_NOTICE?.installed),suppressed:globalThis.WECHAT_INSTALL_NOTICE?.suppressed??0},
       guiLifecycle:{installed:Boolean(globalThis.WECHAT_GUI_LIFECYCLE?.installed), primaryVisible:globalThis.WECHAT_GUI_LIFECYCLE?.primaryVisible??0, seen:Boolean(globalThis.WECHAT_GUI_LIFECYCLE?.seen)},
       autoLogin:globalThis.WECHAT_DEFAULT_LOGIN?.status?.() || {supported:false},
@@ -315,6 +328,10 @@ rpc.exports = {
   migrationStatus(){return rpc.exports.importControl(0);},
   selfId(){const context=accountContext();return decodeResult(supportFunctions().selfId(context.getter,context.manager));},
   microphoneStatus(){accountContext();installMicrophoneHooks();return {dictation:{...microphoneState.dictation},recording:{...microphoneState.recording,status:controlledRecording?.status??'idle'}};},
+  dictationStatus(){
+    if(!accountContext().available)throw Error('native_account_not_ready');
+    installDictationHooks();return {...microphoneState.dictation};
+  },
   armRecording(chatId){accountContext();installMicrophoneHooks();if(controlledRecording)throw Error('native_bridge_busy');refreshConversations();if(!nativeState.chats.some(chat=>chat.id===chatId))throw Error('native_chat_not_found');controlledRecording={chatId,status:'armed'};return {status:'armed'};},
   recordingResult(){if(!controlledRecording)throw Error('native_recording_unavailable');return {status:controlledRecording.status,...(controlledRecording.result??{}),...(controlledRecording.error?{error:controlledRecording.error}:{})};},
   discardRecording(){controlledRecording=null;microphoneState.recording.active=false;return {status:'discarded'};},

@@ -97,6 +97,52 @@ class Controls:
             "channels.open", chatName=self.chat_name(native, chat_id), caption=caption, author=author
         )
 
+    def capture_dictation(self, native, chat_id, timeout):
+        """Observe one user-operated WeChat dictation in an empty composer."""
+        if not self.lock.acquire(blocking=False):
+            raise AppError("native_control_busy", "Another control action is running", 409)
+        try:
+            name = self.chat_name(native, chat_id)
+
+            def draft():
+                state = self.invoke("status")
+                if state.get("chatName") != name or not state.get("fileUiReady"):
+                    raise AppError("native_active_chat_mismatch", "Keep the requested chat open in WeChat", 409)
+                return state["draft"]
+
+            if draft():
+                raise AppError("native_draft_not_empty", "Clear or save the existing WeChat draft first", 409)
+            baseline = native.dictation_status()
+            if baseline["active"]:
+                raise AppError("native_dictation_busy", "Finish the current WeChat dictation first", 409)
+            deadline = time.monotonic() + timeout
+            previous = ""
+            changed_at = time.monotonic()
+            finished = False
+            while time.monotonic() < deadline:
+                text = draft()
+                state = native.dictation_status()
+                starts = state["starts"] - baseline["starts"]
+                finishes = state["finishes"] - baseline["finishes"]
+                if not (0 <= finishes <= starts <= 1) or (not starts and text):
+                    raise AppError(
+                        "native_dictation_interrupted", "Retry with one dictation in an empty draft", 409
+                    )
+                complete = starts == finishes == 1 and not state["active"]
+                if text != previous or complete != finished:
+                    previous, changed_at = text, time.monotonic()
+                finished = complete
+                if complete and text.strip() and time.monotonic() - changed_at >= 0.75:
+                    if len(text) > 8192:
+                        raise AppError("native_dictation_too_long", "Dictation exceeded 8192 characters", 413)
+                    return {"source": "wechat_composer", "chatId": chat_id, "text": text}
+                time.sleep(0.25)
+            raise AppError(
+                "native_dictation_timeout", "WeChat did not finish dictation with text in time", 408
+            )
+        finally:
+            self.lock.release()
+
     def download_attachment(self, native, chat_id, identifier):
         if not self.lock.acquire(blocking=False):
             raise AppError("native_control_busy", "Another control action is running", 409)

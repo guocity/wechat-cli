@@ -18,6 +18,7 @@ from .schemas import (
     ChannelUpdateInput,
     ChannelVideoInput,
     ChannelVideosQuery,
+    DictationInput,
     Empty,
     FileInput,
     HistoryQuery,
@@ -139,6 +140,15 @@ def messages(svc: Service, query: Annotated[HistoryQuery, Query()]):
 @router.get("/native/controls")
 def controls(svc: Service, query: Annotated[Empty, Query()]):
     return svc.backend.controls_status()
+
+
+@router.post("/native/dictation")
+def capture_dictation(svc: Service, payload: DictationInput):
+    if not svc.backend.capabilities().get("composerDictation"):
+        raise AppError(
+            "native_feature_unavailable", "Composer dictation requires a supported macOS WeChat", 424
+        )
+    return svc.backend.capture_dictation(payload.chatId, payload.timeoutSeconds)
 
 
 @router.post("/messages/prepare")

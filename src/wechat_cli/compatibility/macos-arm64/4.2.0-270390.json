@@ -90,5 +90,13 @@
   "sendResultDestructor": {
     "offset": "0x2dbcbb0",
     "signature": "f657bda9f44f01a9fd7b02a9fd830091f30300aa141040f9d40300b4751640f9"
+  },
+  "dictationStart": {
+    "offset": "0x1bb67a0",
+    "signature": "ff4306d1fc6f14a9f85f15a9f65716a9f44f17a9fd7b18a9fd030691f7c30291"
+  },
+  "dictationFinish": {
+    "offset": "0x1bb78c8",
+    "signature": "ffc305d1f65714a9f44f15a9fd7b16a9fd83059128e903d0088141f9080140f9"
   }
 }

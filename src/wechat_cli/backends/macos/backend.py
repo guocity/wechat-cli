@@ -272,6 +272,12 @@ class MacOSBackend:
     def download_attachment(self, chat_id, identifier):
         return self.controls.download_attachment(self, chat_id, identifier)
 
+    def dictation_status(self):
+        return self._request("dictationStatus")
+
+    def capture_dictation(self, chat_id, timeout):
+        return self.controls.capture_dictation(self, chat_id, timeout)
+
     def capabilities(self):
         capabilities = {
             "protocol": "wechat-macos",
@@ -297,6 +303,7 @@ class MacOSBackend:
                 "mediaPreviews",
             }:
                 capabilities[feature] = False
+        capabilities["composerDictation"] = bool(self.observed.get("dictationSupported"))
         return capabilities
 
 

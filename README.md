@@ -127,6 +127,15 @@ Each send gets an idempotency key, printed before the API call. **Reuse the same
 
 OCR uses WeChat's local recognizer. `transcribe` explicitly initiates WeChat voice recognition, which can use WeChat's servers; `transcript` only reads existing recognition state. After a finished recognition failure, use a new `--key` for an explicit retry; repeating the old key returns its stored receipt. Downloading uncached stickers can contact supported Tencent CDNs. Native logout, independent QR login, legacy Web WeChat and static reverse-engineering catalogs are not part of this Python gateway.
 
+On supported macOS builds, `POST /api/native/dictation` captures text from WeChat's **hold-to-dictate chat composer**. Open the requested chat with an empty draft and keep it open. Start the request, hold the touchpad in WeChat, speak, then release. The request returns `chatId` and `text` when the draft settles. It requires Accessibility access for the native controls and any permissions WeChat normally needs for dictation. Check `composerDictation` in `/api/capabilities`.
+
+```sh
+wechat-cli api /api/native/dictation --method POST \
+  --json '{"chatId":"filehelper","timeoutSeconds":30}'
+```
+
+The API observes one native dictation and leaves the resulting text in the draft. It does not start the microphone, accept audio uploads, or send the draft. WeChat controls audio processing, which may use its servers. `timeoutSeconds` accepts 5–60 seconds.
+
 ## Moments on macOS
 
 The local web interface has a **Post a Moment** button. Choose 1–9 still JPEG/PNG

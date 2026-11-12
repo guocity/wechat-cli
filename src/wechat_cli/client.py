@@ -56,6 +56,13 @@ class ApiClient:
     def messages(self, chat_id, limit=50):
         return self.request("/api/native/messages?" + urlencode({"chatId": chat_id, "limit": limit}))
 
+    def capture_dictation(self, chat_id, timeout_seconds=30):
+        return self.request(
+            "/api/native/dictation",
+            method="POST",
+            data={"chatId": chat_id, "timeoutSeconds": timeout_seconds},
+        )
+
     def send(self, chat_id, text, *, idempotency_key):
         return self.request(
             "/api/messages/send", method="POST", data={"chatId": chat_id, "text": text}, key=idempotency_key

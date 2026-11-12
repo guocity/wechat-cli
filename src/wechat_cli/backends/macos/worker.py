@@ -30,6 +30,7 @@ read_only_methods = {
     "cachedMedia",
     "attachmentData",
     "voiceData",
+    "dictationStatus",
 }
 source = (package / "startup-notice.js").read_text(encoding="utf-8") + "\n"
 source += (package / "gui-lifecycle.js").read_text(encoding="utf-8") + "\n"
@@ -153,6 +154,8 @@ try:
                 result = script.exports_sync.migration_status()
             elif request["method"] == "microphoneStatus":
                 result = script.exports_sync.microphone_status()
+            elif request["method"] == "dictationStatus":
+                result = script.exports_sync.dictation_status()
             elif request["method"] == "armRecording":
                 result = script.exports_sync.arm_recording(request["params"]["chatId"])
             elif request["method"] == "recordingResult":
