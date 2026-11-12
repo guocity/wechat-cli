@@ -1,7 +1,7 @@
 {
-  "profile": "windows-x64/4.1.15.53.json",
-  "installerUrl": "https://dldir1v6.qq.com/weixin/Universal/Windows/WeChatWin_4.1.15.exe",
+  "profile": "windows-x64/4.2.0.52.json",
+  "installerUrl": "https://dldir1v6.qq.com/weixin/Universal/Windows/WeChatWin_4.2.0.exe",
   "releaseNotesUrl": "https://weixin.qq.com/updates?platform=windows&version=4.2.0",
-  "installerSha256": "aa727e6cc74cd7c4e101c350d125508b0230a8a19c1f5304bf6f33dde2e758c5",
-  "archiveSha256": "a8c1f3cf4e81d5ebf0b73a057d9b07d57672fe945fbe5a4adbf7bda329b2850a"
+  "installerSha256": "67a53601ae597f0dff821155706e31dbfef36ee972caadb868097eb4d972c11a",
+  "archiveSha256": "3d1d8e9ba938ac79bfc321f4349b4b257b3bc53fdb387d77dd33f0ea95259443"
 }

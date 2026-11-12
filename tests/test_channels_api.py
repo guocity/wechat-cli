@@ -1,6 +1,7 @@
 """Channels management wire contract; no live videos are changed."""
 
 import json
+import sys
 
 import pytest
 
@@ -142,6 +143,7 @@ def test_channels_cli_common_options_at_each_level(argv):
     assert args.port == 8788 and args.channel_command == "stats"
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Channels upload uses a POSIX local video path")
 @pytest.mark.parametrize("post", [False, True])
 def test_channels_upload_cli_forwards_original_declaration(api, capsys, tmp_path, post):
     server, _, native = api

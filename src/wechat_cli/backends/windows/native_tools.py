@@ -2,20 +2,20 @@
 
 import ctypes as ct
 import hashlib
-import json
 import os
 import struct
 import sys
 from pathlib import Path
 
+from .setup import PROFILE
+
 MAXIMUM = 32 * 1024**2
 
 
 def library(app):
-    runtime = Path(app) / "4.1.15.53"
-    profile = json.loads((Path(__file__).parents[2] / "compatibility/windows-x64/4.1.15.53.json").read_text())
+    runtime = Path(app) / PROFILE["version"]
     with (runtime / "VoipEngine.dll").open("rb") as stream:
-        if hashlib.file_digest(stream, "sha256").hexdigest() != profile["codecSha256"]:
+        if hashlib.file_digest(stream, "sha256").hexdigest() != PROFILE["codecSha256"]:
             raise ValueError("unsupported codec build")
     directory = os.add_dll_directory(str(runtime))
     dll = ct.CDLL(str(runtime / "VoipEngine.dll"))

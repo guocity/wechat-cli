@@ -1,5 +1,23 @@
 # Windows native backend validation
 
+## WeChat 4.2.0.52
+
+On November 12, 2026, Windows 11 x64 validation ran in a visible `ai-remote` session. Starting with an empty CLI state directory, `wechat-cli setup` downloaded Tencent's [4.2.0 installer](https://dldir1v6.qq.com/weixin/Universal/Windows/WeChatWin_4.2.0.exe), verified Authenticode and the payload fingerprints, and extracted the portable copy with Windows `tar.exe`. The CLI does not run the installer or require a preinstalled WeChat app. `wechat-cli doctor` verified build **4.2.0.52**, and `wechat-cli start` launched the managed app and local API.
+
+After manual sign-in, the API listed 140 conversations, read File Transfer history, and served a cached attachment and a WAV voice preview. Native text, file and voice preparation passed without queuing any messages. The bridge decoded a synthetic V1 image, local OCR recognized the text in a generated PNG, and the bundled codec encoded and decoded a one-second test tone. The CLI stopped the API while leaving WeChat signed in. Reading the transcript state did not start voice recognition. The Python suite passed on Windows (272 passed, 17 skipped) and macOS (287 passed, 2 skipped).
+
+The Windows profile maps native entry points against this exact build. The codec and OCR helpers use the version selected by the same profile. The shipped manifest and profile pin these SHA-256 fingerprints:
+
+```text
+installer:      67a53601ae597f0dff821155706e31dbfef36ee972caadb868097eb4d972c11a
+embedded 7z:    3d1d8e9ba938ac79bfc321f4349b4b257b3bc53fdb387d77dd33f0ea95259443
+Weixin.exe:     f1c551826488d3e8d31e488f3f1b9ab38e896eea224d963029c7b9b270373dc1
+Weixin.dll:     d733489eea0b62af77e1aa61ba645cd941583d2a64fb2d7572da818d285f8d84
+VoipEngine.dll: 4b508079eabaf04468a0c084441d51f3a7f79712678756af66dbde90fb75d007
+```
+
+## Earlier WeChat 4.1.15.53 validation
+
 Test host: Windows 11 x64, WeChat **4.1.15.53**, 2026-10-15. The checkout is `C:\Users\owner\Documents\github\wechat-cli`. Tests use the signed-in desktop user through SSH/RDP; no firewall, Defender, UAC or SSH settings are changed.
 
 ## Supported operations and limits
@@ -46,7 +64,7 @@ Node is optional for this development check and is not a runtime dependency. `ru
 
 ## Setup and process lifecycle
 
-`uvx wechat-cli setup` downloads Tencent's [4.1.15 installer](https://dldir1v6.qq.com/weixin/Universal/Windows/WeChatWin_4.1.15.exe), verifies its SHA-256 and Tencent Authenticode signature, extracts the embedded payload with Windows `tar.exe`, verifies the EXE/DLL hashes and publishes the prepared directory atomically. Signed vendor PE files are not modified. An unknown or changed payload fails closed.
+For the earlier release, `uvx wechat-cli setup` downloaded Tencent's 4.1.15 installer, verified its SHA-256 and Tencent Authenticode signature, extracted the embedded payload with Windows `tar.exe`, verified the EXE/DLL hashes and published the prepared directory atomically. Signed vendor PE files were preserved. An unknown or changed payload fails closed.
 
 ```text
 installer:  aa727e6cc74cd7c4e101c350d125508b0230a8a19c1f5304bf6f33dde2e758c5

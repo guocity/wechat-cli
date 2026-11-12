@@ -1,0 +1,4 @@
+# The build verifies these source files byte-for-byte against the native manifest.
+/src/wechat_cli/backends/macos/assets/bridge.cpp text eol=lf
+/src/wechat_cli/backends/macos/assets/channels-native.cpp text eol=lf
+/src/wechat_cli/backends/macos/assets/controls.swift text eol=lf

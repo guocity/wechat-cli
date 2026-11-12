@@ -2,7 +2,10 @@
 
 import hashlib
 import json
+import os
+import zipfile
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from hatchling.builders.hooks.plugin.interface import BuildHookInterface
 
@@ -22,3 +25,21 @@ class CustomBuildHook(BuildHookInterface):
             assert (assets / "bin/SILK-LICENSE.txt").is_file()
         except (OSError, ValueError, KeyError, AssertionError) as error:
             raise RuntimeError("Run tools/build_macos_native.py on Apple Silicon before packaging") from error
+
+    def finalize(self, version, build_data, artifact_path):
+        if os.name != "nt" or self.target_name != "wheel" or version != "standard":
+            return
+        # A Windows checkout cannot represent the Unix execute bit in stat().
+        # Preserve it in the universal wheel without changing any RECORD hashes.
+        wheel = Path(artifact_path)
+        controls = "wechat_cli/backends/macos/assets/bin/native-controls"
+        with TemporaryDirectory(dir=wheel.parent) as directory:
+            staged = Path(directory) / wheel.name
+            with zipfile.ZipFile(wheel) as source, zipfile.ZipFile(staged, "w") as target:
+                for entry in source.infolist():
+                    data = source.read(entry)
+                    if entry.filename == controls:
+                        entry.create_system = 3
+                        entry.external_attr |= 0o111 << 16
+                    target.writestr(entry, data)
+            staged.replace(wheel)

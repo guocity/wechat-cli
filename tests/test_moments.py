@@ -1,5 +1,6 @@
 import base64
 import io
+import os
 import shutil
 import threading
 from types import SimpleNamespace
@@ -25,8 +26,9 @@ def payload(count=1):
 def test_nine_photos_are_private_ordered_files(tmp_path):
     folder = stage_media(tmp_path, payload(9))
     assert sorted(p.name for p in folder.iterdir()) == [f"{n:02}.png" for n in range(1, 10)]
-    assert folder.stat().st_mode & 0o777 == 0o700
-    assert all(p.stat().st_mode & 0o777 == 0o600 for p in folder.iterdir())
+    if os.name == "posix":
+        assert folder.stat().st_mode & 0o777 == 0o700
+        assert all(p.stat().st_mode & 0o777 == 0o600 for p in folder.iterdir())
 
 
 @pytest.mark.parametrize("value", [payload(0), payload(10), {"kind": "video", "media": [photo(), photo()]}])

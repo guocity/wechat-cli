@@ -1,4 +1,5 @@
 import json
+import os
 import time
 from urllib.parse import urlencode
 
@@ -122,7 +123,8 @@ def test_cache_preserves_filename_and_is_scoped_to_account(tmp_path, monkeypatch
     assert native.channels_video(message)[0] == mp4()
     assert calls == ["first-account", "second-account"]
     assert len(list((tmp_path / "channels-cache").glob("*.mp4"))) == 2
-    assert all(p.stat().st_mode & 0o077 == 0 for p in (tmp_path / "channels-cache").glob("*"))
+    if os.name == "posix":
+        assert all(p.stat().st_mode & 0o077 == 0 for p in (tmp_path / "channels-cache").glob("*"))
 
 
 def test_native_opener_uses_resolved_chat_caption_and_author(tmp_path):

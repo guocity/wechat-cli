@@ -12,10 +12,11 @@ import threading
 from pathlib import Path
 
 from .protobuf import field, fields
+from .setup import PROFILE
 
 
 def recognize(app, image):
-    runtime = app / "4.1.15.53"
+    runtime = app / PROFILE["version"]
     plugins = Path(os.environ["APPDATA"]) / "Tencent/xwechat/xplugin/plugins/WeChatOcr"
     candidates = [p / "extracted" for p in plugins.iterdir() if p.name.isdecimal()]
     plugin = next(

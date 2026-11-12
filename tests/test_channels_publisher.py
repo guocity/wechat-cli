@@ -2,6 +2,7 @@ import base64
 import json
 import shutil
 import subprocess
+import sys
 import threading
 from contextlib import contextmanager
 from pathlib import Path
@@ -138,6 +139,7 @@ def test_api_capability_and_idempotency(tmp_path):
         assert json.loads(json.dumps(calls[0]))["description"] == ""
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Channels local video mapping is POSIX-only")
 def test_local_file_source_is_mapped_and_preserves_filename(tmp_path):
     path = tmp_path / "roadster-ui.mp4"
     path.write_bytes(mp4())
@@ -154,6 +156,7 @@ def test_local_source_requires_exactly_one_absolute_path():
             ChannelVideoInput(**value)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Channels local video mapping is POSIX-only")
 def test_local_file_size_bound_before_mapping(tmp_path, monkeypatch):
     path = tmp_path / "large.mp4"
     path.write_bytes(mp4())
