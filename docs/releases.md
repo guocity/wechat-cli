@@ -1,5 +1,11 @@
 # Release notes
 
+## 0.2.6
+
+- Support WeChat 4.2.0 on Windows x64, including verified automatic setup and native chat and media operations.
+- Update macOS support for WeChat 4.2.0 and add native composer dictation.
+- Fix Windows wheel packaging and platform-specific test coverage.
+
 ## 0.2.5
 
 - Bundle signed Apple Silicon C++ libraries, Swift controls, and a Python-ABI-independent SILK library. macOS setup and runtime no longer compile helpers or require Xcode Command Line Tools.
