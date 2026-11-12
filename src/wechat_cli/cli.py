@@ -55,9 +55,13 @@ def parser():
     init.add_argument("--destination", help="New patched app location (must not already exist)")
     init.add_argument("--gadget", help="Use a local Frida Gadget dylib instead of downloading it")
     init.add_argument(
+        "--pin-wechat", action="store_true", help="Keep this validated app selected at startup (macOS)"
+    )
+    init.add_argument(
         "--wechat-url", default=None, help="HTTPS installer URL (default supplied by the platform backend)"
     )
     add("doctor", "Check app, payload, Gadget and Frida installation")
+    add("upgrade", "Select the latest validated WeChat build included with this CLI (macOS)")
     start = add("start", "Start the patched WeChat and persistent local API")
     start.add_argument("--foreground", action="store_true", help="Keep the service in this terminal")
     add("serve", "Run WeChat and the API in the foreground")
@@ -175,16 +179,25 @@ def run(args):
     if command == "setup":
         if args.app and (args.destination or args.gadget):
             raise AppError("invalid_options", "--destination and --gadget apply to preparing a new copy")
-        return platform_backend().setup(
+        backend = platform_backend()
+        if args.pin_wechat and backend.Backend.name != "macos":
+            raise AppError("invalid_options", "--pin-wechat is available on macOS")
+        return backend.setup(
             directory,
             app=args.app,
             source=args.source,
             destination=args.destination,
             gadget=args.gadget,
+            **({"pin_wechat": True} if args.pin_wechat else {}),
             **({"wechat_url": args.wechat_url} if args.wechat_url else {}),
         )
     if command == "doctor":
         return platform_backend().doctor(directory)
+    if command == "upgrade":
+        backend = platform_backend()
+        if backend.Backend.name != "macos":
+            raise AppError("unsupported_platform", "The upgrade command is available on macOS", 424)
+        return backend.upgrade(directory)
     if command == "serve" or command == "start" and getattr(args, "foreground", False):
         return serve(directory, port)
     if command == "stop":

@@ -9,6 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from wechat_cli import cli
 from wechat_cli.backends.macos import backend, setup, upgrade
 from wechat_cli.core.config import save_json
 from wechat_cli.core.errors import AppError
@@ -40,7 +41,7 @@ def release(tmp_path, monkeypatch):
     save_json(profiles / "old.json", old)
     save_json(profiles / "latest.json", latest)
     monkeypatch.setattr(setup, "PROFILES", profiles)
-    monkeypatch.setattr(upgrade, "LATEST_PROFILE", profiles / "latest.json")
+    monkeypatch.setattr(setup, "LATEST_PROFILE", profiles / "latest.json")
     monkeypatch.setattr(setup, "require_macos", lambda: None)
     monkeypatch.setattr(setup, "build_helper", lambda app: LIBRARY)
     monkeypatch.setattr(upgrade, "check_instance", lambda *args: None)
@@ -75,11 +76,8 @@ def test_startup_upgrades_old_bridge_and_preserves_original(release, monkeypatch
     assert upgrade.ensure_current(release.directory) == updated
 
 
-def test_shipped_macos_420_upgrade_uses_tencent_installer(release, monkeypatch):
+def test_shipped_macos_upgrade_uses_manifest_installer(release, monkeypatch):
     shipped = json.loads((setup.PACKAGE / "compatibility" / setup.RELEASE["profile"]).read_text())
-    assert (shipped["version"], shipped["build"]) == ("4.2.0", "270390")
-    previous = json.loads((release.profiles / "old.json").read_text())
-    save_json(release.profiles / "old.json", {**previous, "version": "4.1.15", "build": "270135"})
     release.latest.update(version=shipped["version"], build=shipped["build"])
     save_json(release.profiles / "latest.json", release.latest)
     stock = release.directory / "Vendor.app"
@@ -104,13 +102,15 @@ def test_shipped_macos_420_upgrade_uses_tencent_installer(release, monkeypatch):
     monkeypatch.setattr(setup, "mounted_app", lambda *_: nullcontext(stock))
     monkeypatch.setattr(setup, "execute", execute)
     monkeypatch.setattr(
-        setup.subprocess, "run", lambda *a, **kw: SimpleNamespace(stderr=b"TeamIdentifier=5A4RE8SF68")
+        setup.subprocess,
+        "run",
+        lambda *a, **kw: SimpleNamespace(returncode=0, stderr=b"TeamIdentifier=5A4RE8SF68"),
     )
 
     updated = upgrade.ensure_current(release.directory)
 
-    assert urls == [setup.GADGET_URL, "https://dldir1v6.qq.com/weixin/Universal/Mac/WeChatMac_4.2.0.dmg"]
-    assert Path(updated["app"]).name == "WeChatBridge-4.2.0-270390.app"
+    assert urls == [setup.GADGET_URL, setup.RELEASE["installerUrl"]]
+    assert Path(updated["app"]).name == f"WeChatBridge-{shipped['version']}-{shipped['build']}.app"
     assert setup.check_payload(Path(updated["app"])) == release.latest
     assert setup.load_runtime(release.directory) == updated
     assert json.loads((release.directory / "previous-native-runtime.json").read_text()) == release.original
@@ -121,6 +121,20 @@ def test_verified_cached_latest_copy_is_reused_without_download(release, monkeyp
     app_copy(destination, b"latest")
     monkeypatch.setattr(setup, "download", lambda *a, **kw: pytest.fail("Cached app must not download"))
     assert upgrade.ensure_current(release.directory)["app"] == str(destination)
+
+
+def test_fresh_default_setup_rejects_a_different_known_build(release, monkeypatch):
+    stock = Path(release.original["app"])
+    directory = release.directory / "fresh"
+    monkeypatch.setattr(setup, "download", lambda url, path, *_: path)
+    monkeypatch.setattr(setup, "mounted_app", lambda *_: nullcontext(stock))
+    monkeypatch.setattr(setup, "verify_vendor_app", lambda _: None)
+    monkeypatch.setattr(setup, "execute", lambda *a, **kw: pytest.fail("Reject before copying the app"))
+
+    with pytest.raises(AppError) as error:
+        setup.setup(directory, gadget=stock / "Contents/Frameworks/FridaGadget.dylib")
+    assert error.value.code == "unexpected_wechat_payload"
+    assert not (directory / "native-runtime.json").exists()
 
 
 def test_existing_default_latest_copy_is_reused(release, monkeypatch):
@@ -220,6 +234,45 @@ def test_newer_validated_copy_is_never_downgraded(release, monkeypatch):
     save_json(release.directory / "native-runtime.json", current)
     monkeypatch.setattr(setup, "setup", lambda *a, **kw: pytest.fail("Never downgrade"))
     assert upgrade.ensure_current(release.directory) == current
+
+
+def test_higher_build_upgrades_older_four_part_version(release, monkeypatch):
+    release.latest.update(version="4.1.13", build="269631")
+    save_json(release.profiles / "latest.json", release.latest)
+    monkeypatch.setattr(setup, "setup", stage_release(release))
+    assert "4.1.13-269631" in upgrade.ensure_current(release.directory)["app"]
+
+
+def test_pin_keeps_selected_validated_copy_until_registered_without_pin(release, monkeypatch):
+    selected = release.original["app"]
+    setup.setup(release.directory, app=selected, pin_wechat=True)
+    stage = stage_release(release)
+    monkeypatch.setattr(setup, "setup", lambda *a, **kw: pytest.fail("Pinned app must not upgrade"))
+    assert upgrade.ensure_current(release.directory) == {**release.original, "pinned": True}
+    setup.register(selected, release.directory)
+    monkeypatch.setattr(setup, "setup", stage)
+    assert upgrade.ensure_current(release.directory)["app"] != selected
+
+
+def test_explicit_upgrade_releases_pin_only_after_success(release, monkeypatch, capsys):
+    original = {**release.original, "pinned": True}
+    save_json(release.directory / "native-runtime.json", original)
+    monkeypatch.setattr(cli, "platform_backend", lambda: backend)
+    command = ["upgrade", "--data-dir", str(release.directory)]
+
+    monkeypatch.setattr(upgrade, "check_instance", lambda *_: 123)
+    assert cli.main(command) == 1
+    assert setup.load_runtime(release.directory) == original
+    capsys.readouterr()
+
+    monkeypatch.setattr(upgrade, "check_instance", lambda *_: None)
+    app = release.directory / "apps/WeChatBridge-4.1.15-270135.app"
+    staged = app_copy(app, b"latest")
+    monkeypatch.setattr(setup, "download", lambda *a, **kw: pytest.fail("Reuse the prepared app"))
+    assert cli.main(command) == 0
+    assert setup.load_runtime(release.directory) == staged
+    assert json.loads(capsys.readouterr().out)["build"] == "270135"
+    assert json.loads((release.directory / "previous-native-runtime.json").read_text()) == original
 
 
 def test_failed_atomic_activation_preserves_old_pointer(release, monkeypatch):

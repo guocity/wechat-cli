@@ -311,7 +311,7 @@ rpc.exports = {
   status() {
     let accountAvailable = false;
     try {accountAvailable=accountContext().available;nativeState.failure=null;} catch(error) {nativeState.failure=error.message;}
-    return { protocol: nativeState.protocol, state: nativeState.state, wechatVersion:nativeProfile.version, build:nativeProfile.build, readOnly: Boolean(nativeProfile.readOnly),
+    return { protocol: nativeState.protocol, state: nativeState.state, wechatVersion:nativeProfile.version, build:nativeProfile.build, payloadSha256:nativeProfile.payloadSha256, readOnly: Boolean(nativeProfile.readOnly),
       dictationSupported: Boolean(nativeProfile.dictationStart && nativeProfile.dictationFinish),
       installationNoticeSuppression:{installed:Boolean(globalThis.WECHAT_INSTALL_NOTICE?.installed),suppressed:globalThis.WECHAT_INSTALL_NOTICE?.suppressed??0},
       guiLifecycle:{installed:Boolean(globalThis.WECHAT_GUI_LIFECYCLE?.installed), primaryVisible:globalThis.WECHAT_GUI_LIFECYCLE?.primaryVisible??0, seen:Boolean(globalThis.WECHAT_GUI_LIFECYCLE?.seen)},

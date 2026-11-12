@@ -9,13 +9,20 @@ import time
 from pathlib import Path
 
 from wechat_cli.core.models import receipt, resolve_chat, resolve_message
+from wechat_cli.host import lock_file
 from wechat_cli.runtime.transport import WorkerTransport
 
 from .controls import Controls
 from .processes import check_instance
 from .setup import doctor as doctor
-from .setup import setup as setup
+from .setup import setup as prepare_setup
 from .upgrade import ensure_current as ensure_current
+from .upgrade import upgrade as upgrade
+
+
+def setup(directory, **kwargs):
+    with lock_file(directory / "upgrade.lock"):
+        return prepare_setup(directory, **kwargs)
 
 
 class MacOSBackend:

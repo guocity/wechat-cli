@@ -72,6 +72,8 @@ If WeChat is already running when an upgrade is needed, quit it and run `start` 
 
 Profiles are selected by the entire vendor payload's SHA-256, with native function signatures checked before use. Installer filenames alone do not establish compatibility. Tencent can replace a download without changing its filename. Future payloads require a new validated profile and package release; unknown payloads are rejected before patching. To get the newest package, use `uvx --refresh wechat-cli setup`.
 
+On macOS, quit WeChat and run `uv run wechat-cli upgrade` from this checkout to prepare and select the latest validated build, then run `uv run wechat-cli start`. With a published CLI that supports this command, use `uvx --refresh wechat-cli upgrade`. Add `--pin-wechat` to `setup --source` or `setup --app` to keep that validated copy selected during normal startup. Running `upgrade` explicitly resumes managed upgrades. See the [macOS release qualification workflow](docs/macos-upgrades.md) for testing new builds and changing the default.
+
 To prepare the current 4.1.13 download for compatibility work (normal server startup subsequently selects the latest validated release):
 
 ```sh

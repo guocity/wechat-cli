@@ -25,6 +25,7 @@ from .native_assets import native_asset
 
 RELEASE = json.loads((PACKAGE / "compatibility/macos.json").read_text(encoding="utf-8"))
 WECHAT_URL = RELEASE["installerUrl"]
+LATEST_PROFILE = PACKAGE / "compatibility" / RELEASE["profile"]
 GADGET_URL = (
     "https://github.com/frida/frida/releases/download/17.8.0/frida-gadget-17.8.0-macos-universal.dylib.xz"
 )
@@ -240,8 +241,10 @@ def build_helper(app):
     return library
 
 
-def prepared_configuration(app, library, profile, directory, publish):
+def prepared_configuration(app, library, profile, directory, publish, pin_wechat):
     runtime = {"app": str(app), "supportLibrary": library}
+    if pin_wechat:
+        runtime["pinned"] = True
     if publish:
         save_json(directory / "native-runtime.json", runtime)
     return {"configured": True, **runtime, "version": profile["version"], "build": profile["build"]}
@@ -258,14 +261,14 @@ def expected_profile(app, expected_payload=None):
     return profile
 
 
-def register(app, directory, *, publish=True, expected_payload=None):
+def register(app, directory, *, publish=True, expected_payload=None, pin_wechat=False):
     app = check_app(app)
     profile = expected_profile(app, expected_payload)
     library = build_helper(app)
-    return prepared_configuration(app, library, profile, directory, publish)
+    return prepared_configuration(app, library, profile, directory, publish, pin_wechat)
 
 
-def prepare(source, destination, gadget, directory, *, publish=True, expected_payload=None):
+def prepare(source, destination, gadget, directory, *, publish=True, expected_payload=None, pin_wechat=False):
     source, destination = Path(source).resolve(), Path(destination).resolve()
     if destination == Path("/Applications/WeChat.app").resolve() or destination == source:
         raise AppError("stock_app_protected", "Destination must be a separate app copy")
@@ -300,7 +303,16 @@ def prepare(source, destination, gadget, directory, *, publish=True, expected_pa
         library = build_helper(app)
         # Ensure no partially prepared app is exposed as the configured runtime.
         os.rename(app, destination)
-    return prepared_configuration(destination, library, profile, directory, publish)
+    return prepared_configuration(destination, library, profile, directory, publish, pin_wechat)
+
+
+def verify_vendor_app(app):
+    execute(["/usr/bin/codesign", "--verify", "--deep", "--strict", app])
+    details = subprocess.run(
+        ["/usr/bin/codesign", "-dv", "--verbose=4", str(app)], capture_output=True, timeout=30
+    )
+    if details.returncode or b"TeamIdentifier=5A4RE8SF68" not in details.stderr.splitlines():
+        raise AppError("invalid_vendor_signature", "App is not signed by the expected WeChat developer", 424)
 
 
 def setup(
@@ -310,17 +322,19 @@ def setup(
     source=None,
     destination=None,
     gadget=None,
-    wechat_url=WECHAT_URL,
+    wechat_url=None,
     publish=True,
     expected_payload=None,
+    pin_wechat=False,
 ):
     require_macos()
     private_directory(directory)
+    registration = {"publish": publish, "expected_payload": expected_payload, "pin_wechat": pin_wechat}
     if app:
-        return register(app, directory, publish=publish, expected_payload=expected_payload)
+        return register(app, directory, **registration)
     destination = Path(destination or directory / "apps/WeChatBridge.app").expanduser().resolve()
     if not source and destination.exists():
-        return register(destination, directory, publish=publish, expected_payload=expected_payload)
+        return register(destination, directory, **registration)
     downloads = private_directory(directory / "downloads")
     if gadget:
         gadget_path = Path(gadget).expanduser().resolve()
@@ -331,25 +345,15 @@ def setup(
             # The compressed archive is pinned to a verified hash.
             shutil.copyfileobj(input_file, output)
     if source:
-        return prepare(
-            source, destination, gadget_path, directory, publish=publish, expected_payload=expected_payload
-        )
-    dmg = download(wechat_url, downloads / "WeChat.dmg", 1024**3)
+        return prepare(source, destination, gadget_path, directory, **registration)
+    if wechat_url is None and expected_payload is None:
+        registration["expected_payload"] = json.loads(LATEST_PROFILE.read_text(encoding="utf-8"))[
+            "payloadSha256"
+        ]
+    dmg = download(wechat_url or WECHAT_URL, downloads / "WeChat.dmg", 1024**3)
     with mounted_app(dmg, downloads) as stock:
-        # Verify Tencent's signature before trusting any downloaded executable.
-        execute(["/usr/bin/codesign", "--verify", "--deep", "--strict", stock])
-        details = subprocess.run(
-            ["/usr/bin/codesign", "-dv", "--verbose=4", str(stock)], capture_output=True, timeout=30
-        )
-        if b"TeamIdentifier=5A4RE8SF68" not in details.stderr:
-            raise AppError(
-                "invalid_vendor_signature",
-                "Downloaded app is not signed by the expected WeChat developer",
-                424,
-            )
-        return prepare(
-            stock, destination, gadget_path, directory, publish=publish, expected_payload=expected_payload
-        )
+        verify_vendor_app(stock)
+        return prepare(stock, destination, gadget_path, directory, **registration)
 
 
 def doctor(directory):
@@ -363,6 +367,7 @@ def doctor(directory):
         "app": runtime["app"],
         "version": check_payload(Path(runtime["app"]))["version"],
         "build": check_payload(Path(runtime["app"]))["build"],
+        "pinned": runtime.get("pinned", False),
         "fridaVersion": frida.__version__,
         "dataDir": str(directory),
     }
@@ -383,7 +388,10 @@ def load_runtime(directory):
             raise ValueError()
         if not (app / "Contents/Frameworks" / library).is_file():
             raise ValueError()
-        return {"app": str(app.resolve()), "supportLibrary": library}
+        runtime = {"app": str(app.resolve()), "supportLibrary": library}
+        if value.get("pinned") is True:
+            runtime["pinned"] = True
+        return runtime
     except (OSError, ValueError, KeyError, TypeError):
         raise AppError(
             "native_setup_required", "Run wechat-cli setup --app /path/to/patched/WeChat.app", 424

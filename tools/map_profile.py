@@ -51,10 +51,7 @@ def candidates(data, target):
     return matches
 
 
-def main():
-    profile_path, old_path, new_path, output = map(Path, sys.argv[1:])
-    profile = json.loads(profile_path.read_text())
-    old, new = old_path.read_bytes(), new_path.read_bytes()
+def map_functions(profile, old, new):
     result = {"functions": {}, "unresolved": []}
     for name, entry in profile.items():
         if not isinstance(entry, dict) or "signature" not in entry:
@@ -75,11 +72,19 @@ def main():
                     "signature": new[target : target + 32].hex(),
                     "matchedBytes": size,
                 }
-                print(name, hex(target), size, flush=True)
                 break
         else:
             result["unresolved"].append(name)
-    Path(output).write_text(json.dumps(result, indent=2))
+    return result
+
+
+def main():
+    profile_path, old_path, new_path, output = map(Path, sys.argv[1:])
+    profile = json.loads(profile_path.read_text())
+    result = map_functions(profile, old_path.read_bytes(), new_path.read_bytes())
+    output.write_text(json.dumps(result, indent=2) + "\n")
+    for name, entry in result["functions"].items():
+        print(name, entry["offset"], entry["matchedBytes"])
     print("unresolved", result["unresolved"])
 
 

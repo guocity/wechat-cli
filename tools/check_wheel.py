@@ -4,16 +4,16 @@ import argparse
 import email
 import hashlib
 import json
+import re
 import zipfile
 from pathlib import Path
 
 NATIVE_ROOT = "wechat_cli/backends/macos/assets/bin/"
 NATIVE_FILES = {"native-reader.dylib", "channels-native-v2.dylib", "silk.dylib", "native-controls"}
+COMPATIBILITY = Path(__file__).resolve().parents[1] / "src/wechat_cli/compatibility"
 
 REQUIRED = {
     "wechat_cli/core/dependencies.py",
-    "wechat_cli/compatibility/windows.json",
-    "wechat_cli/compatibility/windows-x64/4.1.15.53.json",
     "wechat_cli/backends/windows/assets/agent.js",
     "wechat_cli/backends/windows/assets/transcription.js",
     "wechat_cli/backends/windows/media_cache.py",
@@ -23,7 +23,6 @@ REQUIRED = {
     "wechat_cli/backends/windows/images.py",
     "wechat_cli/backends/windows/protobuf.py",
     "wechat_cli/backends/windows/worker.py",
-    "wechat_cli/compatibility/macos.json",
     "wechat_cli/cli.py",
     "wechat_cli/backends/macos/assets/gui-lifecycle.js",
     "wechat_cli/core/contracts.py",
@@ -37,10 +36,38 @@ REQUIRED = {
     "wechat_cli/web/index.html",
     "wechat_cli/web/app.js",
     "wechat_cli/web/style.css",
-    "wechat_cli/compatibility/macos-arm64/4.1.13.34-269602.json",
-    "wechat_cli/compatibility/macos-arm64/4.1.13-269631.json",
-    "wechat_cli/compatibility/macos-arm64/4.1.15-270135.json",
 }
+
+
+def check_compatibility(archive):
+    root = "wechat_cli/compatibility/"
+    catalog = {
+        name.removeprefix(root): archive.read(name)
+        for name in archive.namelist()
+        if name.startswith(root) and name.endswith(".json")
+    }
+    source = {
+        path.relative_to(COMPATIBILITY).as_posix(): path.read_bytes()
+        for path in COMPATIBILITY.rglob("*.json")
+    }
+    assert catalog == source, "Wheel compatibility data differs from the checkout"
+
+    for platform, architecture in (("macos", "arm64"), ("windows", "x64")):
+        manifest = json.loads(catalog[f"{platform}.json"])
+        prefix = f"{platform}-{architecture}/"
+        assert manifest["profile"].startswith(prefix) and manifest["profile"] in catalog, manifest
+        assert manifest["installerUrl"].startswith("https://"), manifest
+        if platform == "macos":
+            hashes = set()
+            for name, data in catalog.items():
+                if not name.startswith(prefix):
+                    continue
+                profile = json.loads(data)
+                version, build, digest = (profile[key] for key in ("version", "build", "payloadSha256"))
+                assert re.fullmatch(r"[0-9]+(?:\.[0-9]+)*", version) and re.fullmatch(r"[0-9]+", build), name
+                assert name == f"{prefix}{version}-{build}.json" and profile["arch"] == architecture, name
+                assert re.fullmatch(r"[0-9a-f]{64}", digest) and digest not in hashes, name
+                hashes.add(digest)
 
 
 def main():
@@ -50,6 +77,7 @@ def main():
     with zipfile.ZipFile(args.wheel) as archive:
         names = set(archive.namelist())
         assert REQUIRED <= names, REQUIRED - names
+        check_compatibility(archive)
         assert {NATIVE_ROOT + n for n in NATIVE_FILES | {"manifest.json", "SILK-LICENSE.txt"}} <= names
         manifest = json.loads(archive.read(NATIVE_ROOT + "manifest.json"))
         for name in NATIVE_FILES:

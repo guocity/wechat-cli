@@ -11,26 +11,30 @@ from wechat_cli.host import lock_file
 from . import setup as installer
 from .processes import check_instance
 
-LATEST_PROFILE = installer.PACKAGE / "compatibility" / installer.RELEASE["profile"]
-
 
 def release_order(profile):
-    return tuple(int(part) for part in profile["version"].split(".")), int(profile["build"])
+    # Older profiles sometimes record WeChatBundleVersion (e.g. 4.1.13.34)
+    # instead of CFBundleShortVersionString (4.1.13). Compare builds within a public release.
+    return tuple(int(part) for part in profile["version"].split(".")[:3]), int(profile["build"])
 
 
-def ensure_current(directory):
-    """Called under the session lock, including from foreground serve startup."""
+def ensure_current(directory, *, resume_upgrades=False):
+    """Select the managed release under the same lock used by setup."""
     with lock_file(directory / "upgrade.lock"):
         runtime = installer.load_runtime(directory)
         current = installer.check_payload(Path(runtime["app"]))
-        latest = json.loads(LATEST_PROFILE.read_text(encoding="utf-8"))
+        if runtime.get("pinned") and not resume_upgrades:
+            return runtime
+        latest = json.loads(installer.LATEST_PROFILE.read_text(encoding="utf-8"))
         if release_order(current) >= release_order(latest):
+            if runtime.pop("pinned", False):
+                save_json(directory / "native-runtime.json", runtime)
             return runtime
         executable = Path(runtime["app"]) / "Contents/MacOS/WeChat"
         if check_instance(executable) is not None:
             raise AppError(
                 "wechat_update_requires_exit",
-                f"Quit the running WeChat bridge app, then start again to upgrade it to {latest['version']}. Only one WeChat instance is allowed.",
+                f"Quit the running WeChat bridge app, then retry the upgrade to {latest['version']}. Only one WeChat instance is allowed.",
                 409,
             )
         destination = directory / "apps" / f"WeChatBridge-{latest['version']}-{latest['build']}.app"
@@ -52,7 +56,7 @@ def ensure_current(directory):
                     "event": "wechat_upgrade",
                     "from": current["version"],
                     "to": latest["version"],
-                    "message": f"Preparing WeChat bridge {latest['version']} before startup. The existing app is preserved.",
+                    "message": f"Preparing WeChat bridge {latest['version']} in a separate app copy.",
                 }
             ),
             file=sys.stderr,
@@ -80,7 +84,7 @@ def ensure_current(directory):
             if check_instance(executable) is not None:
                 raise AppError(
                     "wechat_update_requires_exit",
-                    "Quit WeChat and retry startup to finish the bridge upgrade",
+                    "Quit WeChat and retry to finish the bridge upgrade",
                     409,
                 )
             replacement = {"app": str(app), "supportLibrary": library}
@@ -98,3 +102,14 @@ def ensure_current(directory):
             flush=True,
         )
         return replacement
+
+
+def upgrade(directory):
+    runtime = ensure_current(directory, resume_upgrades=True)
+    profile = installer.check_payload(Path(runtime["app"]))
+    return {
+        "app": runtime["app"],
+        "version": profile["version"],
+        "build": profile["build"],
+        "readOnly": profile.get("readOnly", False),
+    }
