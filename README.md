@@ -31,13 +31,21 @@ Dependency selection uses standard Python environment markers during installatio
 
 The same small wheel contains both backend modules and their source assets; platform markers select dependencies, not wheel files. No vendor app or native helper binary is bundled. Separate platform distributions would add release and version coordination without materially reducing this wheel.
 
-On macOS, `setup` downloads WeChat 4.1.15 from Tencent and Frida Gadget 17.8.0 from the upstream Frida release. It verifies the Gadget archive's SHA-256, the downloaded app's Tencent signature and its supported payload fingerprint, mounts the installer read-only, and prepares a separate app in:
+### Download WeChat
+
+Tencent's update pages list desktop releases for [macOS](https://weixin.qq.com/updates?platform=mac&version=4.2.0) and [Windows](https://weixin.qq.com/updates?platform=windows&version=4.2.0). As of November 12, 2026, the current 4.2.0 installers are available directly from Tencent for [macOS](https://dldir1v6.qq.com/weixin/Universal/Mac/WeChatMac_4.2.0.dmg) and [Windows](https://dldir1v6.qq.com/weixin/Universal/Windows/WeChatWin_4.2.0.exe). Check the update pages for newer releases.
+
+The package records these release pages in `compatibility/macos.json` and `compatibility/windows.json`. Use them to find future installers, then validate the exact vendor payload before changing the managed default.
+
+On macOS, `setup` downloads WeChat **4.2.0 build 270390** from Tencent and Frida Gadget 17.8.0 from the upstream Frida release. It verifies the Gadget archive's SHA-256, the downloaded app's Tencent signature and its supported payload fingerprint, mounts the installer read-only, and prepares a separate app in:
 
 ```text
 ~/Library/Application Support/wechat-cli/apps/WeChatBridge.app
 ```
 
 It adds Gadget, builds the bundled C++ helper, signs the copy, and records its location. `/Applications/WeChat.app` is not modified. No WeChat app, Gadget binary, credentials or account data are redistributed in the Python package.
+
+The macOS 4.2.0 profile supports **setup, startup, chat listing, message history, cached media reads, and text send dry runs**. Sign in manually in WeChat. Sending, Moments, and Channels require further validation and are unavailable with this profile.
 
 macOS requires **Apple Silicon**, **macOS 13+**, **Python 3.11+** (managed by uv when necessary), and **uv**. The package includes prebuilt native libraries, controls, and the SILK codec; Xcode Command Line Tools are not required for installation or use. Setup runs as your normal user; do not use `sudo uvx`.
 
@@ -49,7 +57,7 @@ On macOS CLI startup, the bridge automatically accepts WeChat's exact **“opene
 
 Quit other WeChat copies before starting the prepared app. Sign in through its normal WeChat window if needed. `start` launches that app and a persistent FastAPI/Uvicorn service. Later commands call the service and reuse its session; they do not log in again. `web` also starts the service if needed, then opens its local page. `stop` stops the Python service and leaves WeChat running and signed in.
 
-Before a new server starts, it checks the registered bridge against the package's latest validated release, currently **4.1.15 / build 270135** on macOS and **4.1.15.53** on Windows. A registered 4.1.13 copy is automatically upgraded: startup reuses a verified managed 4.1.15 copy if available, otherwise downloads and prepares a separate versioned copy, then atomically switches the runtime configuration before launching it. Upgrade progress is printed to stderr. The older copy and `/Applications/WeChat.app` are preserved; the previous runtime pointer is saved as `previous-native-runtime.json`.
+Before a new server starts, it checks the registered bridge against the package's managed release, currently **4.2.0 / build 270390** on macOS and **4.1.15.53** on Windows. On macOS, startup reuses a verified managed 4.2.0 copy if available. Otherwise, it downloads and prepares a separate versioned copy, then atomically switches the runtime configuration before launching it. Upgrade progress is printed to stderr. The previous runtime pointer is saved as `previous-native-runtime.json`.
 
 If WeChat is already running when an upgrade is needed, quit it and run `start` again. Startup enforces the single-instance rule and does not force-quit an app or replace a running bundle. A failed download, unexpected payload or preparation failure leaves the old runtime configuration intact and reports an error instead of silently starting the older version. Already-current copies require no update download. An existing running API session is reused; the check runs on the next new server startup, including `serve` and `web`.
 
@@ -59,7 +67,8 @@ If WeChat is already running when an upgrade is needed, quit it and run `start` 
 | --- | --- | --- |
 | 4.1.13.34 | 269602 | Supply an existing compatible app with `--source` or `--app` |
 | 4.1.13 | 269631 | Tencent's current `WeChatMac_4.1.13.dmg` |
-| 4.1.15 | 270135 | Tencent's current `WeChatMac_4.1.15.dmg` (default) |
+| 4.1.15 | 270135 | Tencent's `WeChatMac_4.1.15.dmg` |
+| 4.2.0 | 270390 | Tencent's `WeChatMac_4.2.0.dmg` (default, read-only CLI) |
 
 Profiles are selected by the entire vendor payload's SHA-256, with native function signatures checked before use. Installer filenames alone do not establish compatibility. Tencent can replace a download without changing its filename. Future payloads require a new validated profile and package release; unknown payloads are rejected before patching. To get the newest package, use `uvx --refresh wechat-cli setup`.
 

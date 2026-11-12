@@ -1,4 +1,5 @@
 {
-  "profile": "macos-arm64/4.1.15-270135.json",
-  "installerUrl": "https://dldir1v6.qq.com/weixin/Universal/Mac/WeChatMac_4.1.15.dmg"
+  "profile": "macos-arm64/4.2.0-270390.json",
+  "installerUrl": "https://dldir1v6.qq.com/weixin/Universal/Mac/WeChatMac_4.2.0.dmg",
+  "releaseNotesUrl": "https://weixin.qq.com/updates?platform=mac&version=4.2.0"
 }

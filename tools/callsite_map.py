@@ -1,11 +1,10 @@
 """Map an ambiguous callee through a uniquely matched surrounding call site."""
 
-import re
 import struct
 import sys
 from pathlib import Path
 
-from map_profile import pattern
+from map_profile import candidates
 
 
 def main():
@@ -26,9 +25,7 @@ def main():
         for before, after in [(128, 128), (96, 96), (64, 64), (32, 32), (16, 16)]:
             start = max(0, pc - before)
             end = pc + after + 4
-            matches = [
-                m.start() for m in re.finditer(pattern(old[start:end]), new, re.DOTALL) if m.start() % 4 == 0
-            ]
+            matches = candidates(old[start:end], new)
             if len(matches) == 1:
                 newpc = matches[0] + pc - start
                 word = struct.unpack_from("<I", new, newpc)[0]

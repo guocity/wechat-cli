@@ -299,7 +299,7 @@ rpc.exports = {
   status() {
     let accountAvailable = false;
     try {accountAvailable=accountContext().available;nativeState.failure=null;} catch(error) {nativeState.failure=error.message;}
-    return { protocol: nativeState.protocol, state: nativeState.state, wechatVersion:nativeProfile.version, build:nativeProfile.build,
+    return { protocol: nativeState.protocol, state: nativeState.state, wechatVersion:nativeProfile.version, build:nativeProfile.build, readOnly: Boolean(nativeProfile.readOnly),
       installationNoticeSuppression:{installed:Boolean(globalThis.WECHAT_INSTALL_NOTICE?.installed),suppressed:globalThis.WECHAT_INSTALL_NOTICE?.suppressed??0},
       guiLifecycle:{installed:Boolean(globalThis.WECHAT_GUI_LIFECYCLE?.installed), primaryVisible:globalThis.WECHAT_GUI_LIFECYCLE?.primaryVisible??0, seen:Boolean(globalThis.WECHAT_GUI_LIFECYCLE?.seen)},
       autoLogin:globalThis.WECHAT_DEFAULT_LOGIN?.status?.() || {supported:false},
@@ -307,7 +307,7 @@ rpc.exports = {
       connected: accountAvailable, accountAvailable, installed: nativeState.installed,
       enumerationObserved: nativeState.enumerationObserved,
       chatCount: nativeState.chats.length, messageReadsObserved: nativeState.messageReadsObserved,
-      failure: nativeState.failure, lastNativeFault, lastNativeStage:nativeSupport?.stage(), messagesImplemented: true, historyVerified: Boolean(nativeState.historyVerified), sendsImplemented: true };
+      failure: nativeState.failure, lastNativeFault, lastNativeStage:nativeSupport?.stage(), messagesImplemented: true, historyVerified: Boolean(nativeState.historyVerified), sendsImplemented: !nativeProfile.readOnly };
   },
   probeTextProcessor() {const context=accountContext();const addresses=[nativeEntry('accountServices'),nativeEntry('messageService'),nativeEntry('sendProcessor')];return inNativeTask(()=>{const value=decodeResult(supportFunctions().probeProcessor(context.getter,context.manager,...addresses));value.processorVtableOffset=ptr(value.processorVtable).sub(liveNativeBase).toString();delete value.processorVtable;return value;});},
   voiceData(chatId,id){return nativeMessages(chatId,100,id);},

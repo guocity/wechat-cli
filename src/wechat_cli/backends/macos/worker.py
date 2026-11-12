@@ -20,6 +20,17 @@ data_dir = pathlib.Path(os.environ["WECHAT_DATA_DIR"])
 config = json.loads((app / "Contents/Frameworks/FridaGadget.config").read_text(encoding="utf-8"))
 
 profile = check_payload(app)
+read_only_methods = {
+    "status",
+    "loginSaved",
+    "listChats",
+    "listMessages",
+    "rawMessages",
+    "prepareText",
+    "cachedMedia",
+    "attachmentData",
+    "voiceData",
+}
 source = (package / "startup-notice.js").read_text(encoding="utf-8") + "\n"
 source += (package / "gui-lifecycle.js").read_text(encoding="utf-8") + "\n"
 source += "globalThis.WECHAT_NATIVE_PROFILE=" + json.dumps(profile) + ";\n"
@@ -110,6 +121,9 @@ try:
     emit({"event": "ready", "protocol": 1, "pid": identity["pid"]})
     for line in sys.stdin:
         request = json.loads(line)
+        if profile.get("readOnly") and request["method"] not in read_only_methods:
+            emit({"id": request["id"], "error": "native_feature_unavailable"})
+            continue
         try:
             if request["method"] == "status":
                 result = script.exports_sync.status()

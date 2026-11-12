@@ -21,6 +21,36 @@ def pattern(data):
     return b"".join(parts)
 
 
+def candidates(data, target):
+    # Search for the longest run of fixed instructions before checking the
+    # complete pattern. Scanning the entire image with the regex is much slower
+    # when a function starts with an address-dependent instruction.
+    fixed = []
+    for offset in range(0, len(data), 4):
+        word = data[offset : offset + 4]
+        if pattern(word) == b".{4}":
+            continue
+        if fixed and fixed[-1][1] == offset:
+            fixed[-1] = (fixed[-1][0], offset + 4)
+        else:
+            fixed.append((offset, offset + 4))
+    if not fixed:
+        return []
+    start, end = max(fixed, key=lambda run: run[1] - run[0])
+    anchor = data[start:end]
+    matcher = re.compile(pattern(data), re.DOTALL)
+    matches = []
+    position = target.find(anchor, start)
+    while position >= 0:
+        offset = position - start
+        if offset % 4 == 0 and matcher.match(target, offset):
+            matches.append(offset)
+            if len(matches) == 2:
+                break
+        position = target.find(anchor, position + 1)
+    return matches
+
+
 def main():
     profile_path, old_path, new_path, output = map(Path, sys.argv[1:])
     profile = json.loads(profile_path.read_text())
@@ -30,12 +60,14 @@ def main():
         if not isinstance(entry, dict) or "signature" not in entry:
             continue
         offset = int(entry["offset"], 16)
+        signature = bytes.fromhex(entry["signature"])
+        if old[offset : offset + len(signature)] != signature:
+            raise SystemExit(
+                f"Source bytes for {name} do not match the profile. "
+                "Use the matching build and extract its arm64 slice with lipo -thin arm64."
+            )
         for size in [256, 192, 128, 96, 64, 48, 32]:
-            matches = [
-                m.start()
-                for m in re.finditer(pattern(old[offset : offset + size]), new, flags=re.DOTALL)
-                if m.start() % 4 == 0
-            ]
+            matches = candidates(old[offset : offset + size], new)
             if len(matches) == 1:
                 target = matches[0]
                 result["functions"][name] = {

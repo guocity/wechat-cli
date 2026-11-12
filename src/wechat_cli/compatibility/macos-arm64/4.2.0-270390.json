@@ -1,0 +1,94 @@
+{
+  "version": "4.2.0",
+  "build": "270390",
+  "arch": "arm64",
+  "payloadSha256": "685914bfd55f9e102f3769d2f25e37a0735cd0ce41485b36d5df83de6eecd2b8",
+  "enumeration": {
+    "offset": "0x2938b90",
+    "signature": "fa67bba9f85f01a9f65702a9f44f03a9fd7b04a9fd030191ff4308d1f30308aa",
+    "scanPattern": "fa 67 bb a9 f8 5f 01 a9 f6 57 02 a9 f4 4f 03 a9 fd 7b 04 a9 fd 03 01 91 ff 43 08 d1 f3 03 08 aa f5 c3 02 91 28 7d 03 b0 08 81 41 f9 08 01 40 f9 a8 83 1b f8 19 12 06 95 f4 03 00 aa 00 e4 00 6f 60 02 00 ad 08 f0 a7 d2 48 55 d5 f2 48 55 f5 f2 68 12 00 f9 40 e5 05 4f a0 02 00 ad a8 aa ca 92 48 55 f5 f2 e8 6b 00 f9 9b e5 5b 94 08 00 40 f9 09 35 40 f9 e8 a3 03 91 20 01 3f d6 e0 77 40 f9 : ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff 1f 00 00 9f ff ff ff ff ff ff ff ff ff ff ff ff 00 00 00 fc ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff 00 00 00 fc ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff"
+  },
+  "initialMessages": {
+    "offset": "0x2df579c",
+    "signature": "fc6fbaa9fa6701a9f85f02a9f65703a9f44f04a9fd7b05a9fd430191ff830cd1"
+  },
+  "pagedMessages": {
+    "offset": "0x2df6914",
+    "signature": "fc6fbaa9fa6701a9f85f02a9f65703a9f44f04a9fd7b05a9fd430191ff430cd1"
+  },
+  "readOnly": true,
+  "taskContextTlsOffset": "0x9b42630",
+  "sessionServiceMarkerOffset": "0x96a7ef8",
+  "accountServices": {
+    "offset": "0x16f4d9c",
+    "signature": "0aa442a90a2500a9890000b42821009129008052080129f8c0035fd6ff0301d1"
+  },
+  "voiceAudioPath": {
+    "offset": "0x3172b40",
+    "signature": "ff4303d1f6570aa9f44f0ba9fd7b0ca9fd030391f50302aaf40300aaf30308aa"
+  },
+  "voiceDataGetter": {
+    "offset": "0x2df94b8",
+    "signature": "ff8302d1f65707a9f44f08a9fd7b09a9fd430291f30302aaf60301aaf40300aa"
+  },
+  "messageUiDestructor": {
+    "offset": "0x378e0c",
+    "signature": "f44fbea9fd7b01a9fd430091f30300aa009841f9c00000b4140040f901038052"
+  },
+  "sessionService": {
+    "offset": "0x3efc808",
+    "signature": "ffc302d1fa6706a9f85f07a9f65708a9f44f09a9fd7b0aa9fd830291f40301aa"
+  },
+  "isMinimizedSession": {
+    "offset": "0x464dd08",
+    "signature": "f44fbea9fd7b01a9fd430091f30300aaa12bfa9780000034683e41b908010412"
+  },
+  "isPinnedSession": {
+    "offset": "0x464dcfc",
+    "signature": "08f44439000d0353c0035fd6f44fbea9fd7b01a9fd430091f30300aaa12bfa97"
+  },
+  "taskContextGuard": {
+    "offset": "0x5fee188",
+    "signature": "f44fbea9fd7b01a9fd430091f30300aaa0da019000c01891080040f900013fd6"
+  },
+  "contactService": {
+    "offset": "0x2150570",
+    "signature": "ffc301d1f44f05a9fd7b06a9fd830191f40300aaf30308aa08aa03b008012f91"
+  },
+  "contactDisplayName": {
+    "offset": "0x28689c4",
+    "signature": "ff0307d1f65719a9f44f1aa9fd7b1ba9fdc30691f50302aaf40301aaf30308aa"
+  },
+  "messageService": {
+    "offset": "0x245effc",
+    "signature": "ffc301d1f44f05a9fd7b06a9fd830191f40300aaf30308aa4892039008612c91"
+  },
+  "copySessions": {
+    "offset": "0x25a4b84",
+    "signature": "f657bda9f44f01a9fd7b02a9fd830091f30300aa00e4006f000000ad202040bd"
+  },
+  "sessionDestructor": {
+    "offset": "0x1f26d0",
+    "signature": "f85fbca9f65701a9f44f02a9fd7b03a9fdc30091f30300aa089cc939a806f837"
+  },
+  "messageUiConversion": {
+    "offset": "0x2e2e98c",
+    "signature": "fc6fbaa9fa6701a9f85f02a9f65703a9f44f04a9fd7b05a9fd430191ff8315d1"
+  },
+  "makeNativeUuid": {
+    "offset": "0x33cb0",
+    "signature": "ff0302d1f44f06a9fd7b07a9fdc30191f30308aa48c504d0088141f9080140f9"
+  },
+  "makeUiSendInfo": {
+    "offset": "0x6f3738",
+    "signature": "f44fbea9fd7b01a9fd430091f30308aa008a8052e2278f95e003679e0004186e"
+  },
+  "sendGroupMessages": {
+    "offset": "0x2db6f20",
+    "signature": "e923b96dfc6f01a9fa6702a9f85f03a9f65704a9f44f05a9fd7b06a9fd830191"
+  },
+  "sendResultDestructor": {
+    "offset": "0x2dbcbb0",
+    "signature": "f657bda9f44f01a9fd7b02a9fd830091f30300aa141040f9d40300b4751640f9"
+  }
+}

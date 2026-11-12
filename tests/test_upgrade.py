@@ -1,7 +1,9 @@
 import hashlib
 import json
+import lzma
 import shutil
 import struct
+from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -71,6 +73,47 @@ def test_startup_upgrades_old_bridge_and_preserves_original(release, monkeypatch
     assert not output.out and '"to": "4.1.15"' in output.err
     monkeypatch.setattr(setup, "setup", lambda *a, **kw: pytest.fail("Already current: no download/build"))
     assert upgrade.ensure_current(release.directory) == updated
+
+
+def test_shipped_macos_420_upgrade_uses_tencent_installer(release, monkeypatch):
+    shipped = json.loads((setup.PACKAGE / "compatibility" / setup.RELEASE["profile"]).read_text())
+    assert (shipped["version"], shipped["build"]) == ("4.2.0", "270390")
+    previous = json.loads((release.profiles / "old.json").read_text())
+    save_json(release.profiles / "old.json", {**previous, "version": "4.1.15", "build": "270135"})
+    release.latest.update(version=shipped["version"], build=shipped["build"])
+    save_json(release.profiles / "latest.json", release.latest)
+    stock = release.directory / "Vendor.app"
+    app_copy(stock, b"latest")
+    urls = []
+
+    def download(url, path, *_):
+        urls.append(url)
+        if url == setup.GADGET_URL:
+            path.write_bytes(lzma.compress(b"gadget"))
+        return path
+
+    def execute(args, **kwargs):
+        if args[0] == "/usr/bin/ditto":
+            shutil.copytree(args[1], args[2])
+        return b""
+
+    executable = stock / "Contents/MacOS/WeChat"
+    executable.parent.mkdir()
+    executable.write_bytes(struct.pack("<IIIIIIII", 0xFEEDFACF, 0x100000C, 0, 2, 0, 0, 0, 0) + bytes(512))
+    monkeypatch.setattr(setup, "download", download)
+    monkeypatch.setattr(setup, "mounted_app", lambda *_: nullcontext(stock))
+    monkeypatch.setattr(setup, "execute", execute)
+    monkeypatch.setattr(
+        setup.subprocess, "run", lambda *a, **kw: SimpleNamespace(stderr=b"TeamIdentifier=5A4RE8SF68")
+    )
+
+    updated = upgrade.ensure_current(release.directory)
+
+    assert urls == [setup.GADGET_URL, "https://dldir1v6.qq.com/weixin/Universal/Mac/WeChatMac_4.2.0.dmg"]
+    assert Path(updated["app"]).name == "WeChatBridge-4.2.0-270390.app"
+    assert setup.check_payload(Path(updated["app"])) == release.latest
+    assert setup.load_runtime(release.directory) == updated
+    assert json.loads((release.directory / "previous-native-runtime.json").read_text()) == release.original
 
 
 def test_verified_cached_latest_copy_is_reused_without_download(release, monkeypatch):

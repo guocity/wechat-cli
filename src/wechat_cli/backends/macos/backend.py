@@ -273,7 +273,7 @@ class MacOSBackend:
         return self.controls.download_attachment(self, chat_id, identifier)
 
     def capabilities(self):
-        return {
+        capabilities = {
             "protocol": "wechat-macos",
             "nativeBridge": True,
             "independentClient": False,
@@ -288,6 +288,16 @@ class MacOSBackend:
             "momentsReading": "wechat_native_ui",
             "channelsPosting": "wechat_embedded_browser_experimental",
         }
+        if self.observed.get("readOnly"):
+            for feature in capabilities.keys() - {
+                "protocol",
+                "nativeBridge",
+                "independentClient",
+                "chatHistory",
+                "mediaPreviews",
+            }:
+                capabilities[feature] = False
+        return capabilities
 
 
 Backend = MacOSBackend
